@@ -1,0 +1,1723 @@
+openapi: 3.0.0
+info:
+  title: Sabr Shukr Backend API
+  version: 1.0.0
+  description: API documentation for the Sabr Shukr e-commerce platform backend.
+servers:
+  - url: http://localhost:5000/api
+    description: Development server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+tags:
+  - name: Auth
+    description: User authentication and authorization
+  - name: Homepage
+    description: Aggregated content for the homepage
+  - name: Products & Categories
+    description: Product and Category related operations
+  - name: User Profile & Addresses
+    description: User profile and shipping address management
+  - name: Wishlist
+    description: User wishlist management
+  - name: Cart
+    description: User shopping cart management
+  - name: Orders
+    description: Order history and management
+  - name: Reviews & Ratings
+    description: Product reviews and ratings management
+  - name: Payment APIs
+    description: Payment gateway integration endpoints
+  - name: Admin APIs
+    description: Admin panel management operations (requires admin role)
+  - name: Admin User Management
+    description: Management of user accounts by administrators
+  - name: Admin Order Management
+    description: Management of customer orders by administrators
+  - name: Admin Review Management
+    description: Management of product reviews by administrators
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: strongpassword123
+                fullName:
+                  type: string
+                  example: John Doe
+      responses:
+        '201':
+          description: User successfully registered
+        '400':
+          description: Invalid input
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Log in an existing user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: strongpassword123
+      responses:
+        '200':
+          description: User successfully logged in
+        '401':
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logs out the currently authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully logged out
+        '401':
+          description: Unauthorized
+  /auth/social-login:
+    post:
+      tags:
+        - Auth
+      summary: Initiates a social login flow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [google, facebook]
+                  example: google
+      responses:
+        '200':
+          description: Social login initiated. Returns a redirect URL.
+        '400':
+          description: Invalid provider
+  /homepage:
+    get:
+      tags:
+        - Homepage
+      summary: Fetches all aggregated content needed to render the main homepage
+      responses:
+        '200':
+          description: Successfully fetched homepage data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      banners:
+                        type: array
+                        items:
+                          type: object # Define banner schema if needed
+                      watchAndShopVideos:
+                        type: array
+                        items:
+                          type: object # Define video schema if needed
+                      featuredProducts:
+                        type: array
+                        items:
+                          type: object # Define product schema if needed
+                      parentCategories:
+                        type: array
+                        items:
+                          type: object # Define category schema if needed
+        '500':
+          description: Internal Server Error
+  /products:
+    get:
+      tags:
+        - Products & Categories
+      summary: Lists all published products with filtering and pagination
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: Filter products by category ID
+        - in: query
+          name: brand
+          schema:
+            type: string
+          description: Filter products by brand
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [price, name, created_at]
+          description: Field to sort by
+        - in: query
+          name: order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+          description: Sort order
+        - in: query
+          name: page
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of items per page
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+            format: float
+            minimum: 0
+          description: Minimum price for filtering
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+            format: float
+            minimum: 0
+          description: Maximum price for filtering
+      responses:
+        '200':
+          description: Successfully retrieved products
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Detailed product schema can go here later
+        '400':
+          description: Invalid query parameters
+        '500':
+          description: Internal Server Error
+  /products/{id}:
+    get:
+      tags:
+        - Products & Categories
+      summary: Gets the full details of a single published product
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to retrieve
+      responses:
+        '200':
+          description: Successfully retrieved product details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object # Detailed product schema with images and reviews
+        '404':
+          description: Product not found or not published
+        '500':
+          description: Internal Server Error
+  /products/search:
+    get:
+      tags:
+        - Products & Categories
+      summary: Searches for products based on a query string
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          required: true
+          description: Search query string (e.g., product name, description, brand)
+      responses:
+        '200':
+          description: Successfully retrieved search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Product search result schema
+        '400':
+          description: Search query parameter (q) is required
+        '500':
+          description: Internal Server Error
+  /categories:
+    get:
+      tags:
+        - Products & Categories
+      summary: Lists all active categories and their sub-categories
+      responses:
+        '200':
+          description: Successfully retrieved categories
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Category schema with sub_categories
+        '500':
+          description: Internal Server Error
+  /user/profile:
+    get:
+      tags:
+        - User Profile & Addresses
+      summary: Gets the profile of the currently logged-in user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved user profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object # User profile schema
+        '401':
+          description: Unauthorized
+        '404':
+          description: User profile not found
+        '500':
+          description: Internal Server Error
+    put:
+      tags:
+        - User Profile & Addresses
+      summary: Updates the profile of the currently logged-in user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                  example: Jane Doe
+                profilePictureUrl:
+                  type: string
+                  format: uri
+                  example: https://example.com/profile.jpg
+      responses:
+        '200':
+          description: User profile updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: User profile not found
+        '500':
+          description: Internal Server Error
+  /user/addresses:
+    get:
+      tags:
+        - User Profile & Addresses
+      summary: Gets all saved addresses for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved user addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Address schema
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+    post:
+      tags:
+        - User Profile & Addresses
+      summary: Adds a new shipping address for the current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addressLine1:
+                  type: string
+                  example: 123 Main St
+                addressLine2:
+                  type: string
+                  example: Apt 4B
+                city:
+                  type: string
+                  example: Someville
+                state:
+                  type: string
+                  example: StateName
+                pincode:
+                  type: string
+                  example: "123456"
+                country:
+                  type: string
+                  example: India
+                isDefault:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Address added successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /user/addresses/{id}:
+    put:
+      tags:
+        - User Profile & Addresses
+      summary: Updates a specific shipping address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the address to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                addressLine1:
+                  type: string
+                  example: 123 New St
+                addressLine2:
+                  type: string
+                  example: Suite 1A
+                city:
+                  type: string
+                  example: Another Town
+                state:
+                  type: string
+                  example: NewState
+                pincode:
+                  type: string
+                  example: "654321"
+                country:
+                  type: string
+                  example: India
+                isDefault:
+                  type: boolean
+                  example: false
+      responses:
+        '200':
+          description: Address updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: Address not found or does not belong to user
+        '500':
+          description: Internal Server Error
+  /user/wishlist:
+    get:
+      tags:
+        - Wishlist
+      summary: Gets all items in the user's wishlist
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved wishlist items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Wishlist item schema (product details)
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+    post:
+      tags:
+        - Wishlist
+      summary: Adds a product to the user's wishlist
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId:
+                  type: integer
+                  format: int64
+                  example: 123
+      responses:
+        '201':
+          description: Product added to wishlist successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '409':
+          description: Product already in wishlist
+        '500':
+          description: Internal Server Error
+  /user/wishlist/{productId}:
+    delete:
+      tags:
+        - Wishlist
+      summary: Removes a product from the user's wishlist
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to remove from wishlist
+      responses:
+        '200':
+          description: Product removed from wishlist successfully
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /cart:
+    get:
+      tags:
+        - Cart
+      summary: Gets all items in the user's cart
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved cart items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Cart item schema (product details and quantity)
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /cart/add:
+    post:
+      tags:
+        - Cart
+      summary: Adds an item to the cart or increments its quantity if it already exists
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId:
+                  type: integer
+                  format: int64
+                  example: 123
+                quantity:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                  example: 1
+      responses:
+        '201':
+          description: Product added to cart or quantity updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /cart/update:
+    put:
+      tags:
+        - Cart
+      summary: Updates the quantity of a specific item in the cart
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId:
+                  type: integer
+                  format: int64
+                  example: 123
+                quantity:
+                  type: integer
+                  format: int32
+                  minimum: 0 # Allows setting quantity to 0 to remove item
+                  example: 3
+      responses:
+        '200':
+          description: Cart item quantity updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: Cart item not found
+        '500':
+          description: Internal Server Error
+  /cart/remove/{productId}:
+    delete:
+      tags:
+        - Cart
+      summary: Removes an item completely from the cart
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to remove from cart
+      responses:
+        '200':
+          description: Product removed from cart successfully
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /orders:
+    post:
+      tags:
+        - Orders
+      summary: Places a new order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shippingAddressId:
+                  type: integer
+                  format: int64
+                  example: 1
+      responses:
+        '201':
+          description: Order placed successfully
+        '400':
+          description: Invalid input or empty cart
+        '401':
+          description: Unauthorized
+        '404':
+          description: Shipping address not found
+        '500':
+          description: Internal Server Error
+    get:
+      tags:
+        - Orders
+      summary: Gets the order history for the current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved order history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Order history schema with order items and product details
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal Server Error
+  /orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Gets the details of a single order, including order items
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the order to retrieve
+      responses:
+        '200':
+          description: Successfully retrieved order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object # Single order schema with detailed order items
+        '401':
+          description: Unauthorized
+        '404':
+          description: Order not found or does not belong to user
+        '500':
+          description: Internal Server Error
+  /reviews:
+    post:
+      tags:
+        - Reviews & Ratings
+      summary: Submits a review for a product
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                productId:
+                  type: integer
+                  format: int64
+                  example: 123
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                comment:
+                  type: string
+                  example: Excellent product, highly recommend!
+      responses:
+        '201':
+          description: Review submitted successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: User has not purchased this product or already reviewed it'
+        '409':
+          description: Conflict - User has already reviewed this product
+        '500':
+          description: Internal Server Error
+  /payment/initiate:
+    post:
+      tags:
+        - Payment APIs
+      summary: Initiates a payment process with the payment gateway for a given order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                  format: int64
+                  example: 456
+      responses:
+        '200':
+          description: Payment order/intent created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  order:
+                    type: object # Razorpay order details
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: Order not found
+        '500':
+          description: Internal Server Error
+  /payment/webhook:
+    post:
+      tags:
+        - Payment APIs
+      summary: Receives payment status updates from the payment gateway
+      description: This endpoint is called by the payment gateway (e.g., Razorpay) to notify of payment status updates. It requires webhook signature verification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object # Webhook payload structure varies by gateway
+              example:
+                event: payment.captured
+                payload:
+                  payment:
+                    entity:
+                      id: pay_xxxxxxxxxxxxxx
+                      amount: 50000
+                      currency: INR
+                      status: captured
+                      notes:
+                        order_id: 456
+      responses:
+        '200':
+          description: Webhook received and processed successfully
+        '403':
+          description: 'Invalid signature'
+        '500':
+          description: Internal Server Error
+  /admin/dashboard:
+    get:
+      tags:
+        - Admin APIs
+      summary: Fetches aggregated analytics for the admin dashboard
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      totalSales:
+                        type: number
+                        format: float
+                        example: 123456.78
+                      newUsers:
+                        type: integer
+                        example: 50
+                      recentOrders:
+                        type: array
+                        items:
+                          type: object # Simplified order object for dashboard
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/products:
+    post:
+      tags:
+        - Admin APIs
+      summary: Creates a new product
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Wellness Yoga Mat
+                slug:
+                  type: string
+                  example: wellness-yoga-mat
+                description:
+                  type: string
+                  example: High-quality, eco-friendly yoga mat for optimal comfort.
+                ingredients:
+                  type: string
+                  example: Natural rubber, organic cotton
+                price:
+                  type: number
+                  format: float
+                  example: 29.99
+                brand:
+                  type: string
+                  example: ZenFlow
+                stockQuantity:
+                  type: integer
+                  example: 100
+                isPublished:
+                  type: boolean
+                  example: true
+                isFeatured:
+                  type: boolean
+                  example: false
+                imageUrls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  example:
+                    - https://example.com/mat1.jpg
+                    - https://example.com/mat2.jpg
+                categoryIds:
+                  type: array
+                  items:
+                    type: integer
+                  example: [1, 5]
+      responses:
+        '201':
+          description: Product created successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/products/{id}:
+    put:
+      tags:
+        - Admin APIs
+      summary: Updates an existing product
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                description:
+                  type: string
+                ingredients:
+                  type: string
+                price:
+                  type: number
+                  format: float
+                brand:
+                  type: string
+                stockQuantity:
+                  type: integer
+                isPublished:
+                  type: boolean
+                isFeatured:
+                  type: boolean
+                imageUrls:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                categoryIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Product updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Deletes a product
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to delete
+      responses:
+        '200':
+          description: Product deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/products/{id}/feature:
+    put:
+      tags:
+        - Admin APIs
+      summary: Sets a product as featured
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to feature
+      responses:
+        '200':
+          description: Product marked as featured
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Removes a product from featured
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the product to unfeature
+      responses:
+        '200':
+          description: Product unfeatured successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+  /admin/categories:
+    post:
+      tags:
+        - Admin APIs
+      summary: Creates a new category
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Yoga Apparel
+                slug:
+                  type: string
+                  example: yoga-apparel
+                description:
+                  type: string
+                  example: Clothing and accessories for yoga practice.
+                imageUrl:
+                  type: string
+                  format: uri
+                  example: https://example.com/yoga-apparel.jpg
+                parentId:
+                  type: integer
+                  format: int64
+                  nullable: true
+                  example: null
+                isActive:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Category created successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/categories/{id}:
+    put:
+      tags:
+        - Admin APIs
+      summary: Updates an existing category
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the category to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                description:
+                  type: string
+                imageUrl:
+                  type: string
+                  format: uri
+                parentId:
+                  type: integer
+                  format: int64
+                  nullable: true
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Category updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Category not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Deletes a category
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the category to delete
+      responses:
+        '200':
+          description: Category deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/banners:
+    get:
+      tags:
+        - Admin APIs
+      summary: Retrieves all homepage banners
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved banners
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Banner schema
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+    post:
+      tags:
+        - Admin APIs
+      summary: Creates a new homepage banner
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: Summer Sale Banner
+                description:
+                  type: string
+                  example: Get up to 50% off on all wellness products this summer!
+                mediaUrl:
+                  type: string
+                  format: uri
+                  example: https://example.com/banner-summer.jpg
+                mediaType:
+                  type: string
+                  enum: [image, video]
+                  example: image
+                linkTo:
+                  type: string
+                  example: /products?sale=summer
+                displayOrder:
+                  type: integer
+                  example: 1
+                isActive:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Banner created successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/banners/{id}:
+    put:
+      tags:
+        - Admin APIs
+      summary: Updates an existing homepage banner
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the banner to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                mediaUrl:
+                  type: string
+                  format: uri
+                mediaType:
+                  type: string
+                  enum: [image, video]
+                linkTo:
+                  type: string
+                displayOrder:
+                  type: integer
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Banner updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Banner not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Deletes a homepage banner
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the banner to delete
+      responses:
+        '200':
+          description: Banner deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Banner not found
+        '500':
+          description: Internal Server Error
+  /admin/watch-and-shop:
+    get:
+      tags:
+        - Admin APIs
+      summary: Retrieves all 'Watch and Shop' videos
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved videos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Watch and Shop Video schema
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+    post:
+      tags:
+        - Admin APIs
+      summary: Creates a new 'Watch and Shop' video
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: Yoga Flow for Beginners
+                videoUrl:
+                  type: string
+                  format: uri
+                  example: https://youtube.com/watch?v=yogavideo
+                thumbnailUrl:
+                  type: string
+                  format: uri
+                  example: https://example.com/yoga-thumbnail.jpg
+                productId:
+                  type: integer
+                  format: int64
+                  nullable: true
+                  example: 123
+                displayOrder:
+                  type: integer
+                  example: 1
+                isActive:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Video created successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/watch-and-shop/{id}:
+    put:
+      tags:
+        - Admin APIs
+      summary: Updates an existing 'Watch and Shop' video
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the video to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                videoUrl:
+                  type: string
+                  format: uri
+                thumbnailUrl:
+                  type: string
+                  format: uri
+                productId:
+                  type: integer
+                  format: int64
+                  nullable: true
+                displayOrder:
+                  type: integer
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Video updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Video not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Deletes a 'Watch and Shop' video
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the video to delete
+      responses:
+        '200':
+          description: Video deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Video not found
+        '500':
+          description: Internal Server Error
+  /admin/orders:
+    get:
+      tags:
+        - Admin Order Management
+      summary: Retrieves all customer orders
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Order schema for admin view
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/orders/{id}/status:
+    put:
+      tags:
+        - Admin Order Management
+      summary: Updates the status of a specific order
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the order to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [pending, processing, shipped, delivered, cancelled]
+                  example: shipped
+      responses:
+        '200':
+          description: Order status updated successfully
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Order not found
+        '500':
+          description: Internal Server Error
+  /admin/reviews:
+    get:
+      tags:
+        - Admin Review Management
+      summary: Retrieves all product reviews
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved reviews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object # Review schema for admin view
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error
+  /admin/reviews/{id}/approve:
+    put:
+      tags:
+        - Admin Review Management
+      summary: Approves a product review
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the review to approve
+      responses:
+        '200':
+          description: Review approved successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Review not found
+        '500':
+          description: Internal Server Error
+  /admin/reviews/{id}:
+    delete:
+      tags:
+        - Admin Review Management
+      summary: Deletes a product review
+      description: Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the review to delete
+      responses:
+        '200':
+          description: Review deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '404':
+          description: Review not found
+        '500':
+          description: Internal Server Error

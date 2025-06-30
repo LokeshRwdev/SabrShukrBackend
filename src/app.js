@@ -8,7 +8,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: ["http://localhost:5000", "https://sabrshukrbackend.onrender.com"], // Add your React app's deployed URL here
+    origin: ["http://localhost:8080", "https://sabrshukrbackend.onrender.com"], // Add your React app's deployed URL here
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

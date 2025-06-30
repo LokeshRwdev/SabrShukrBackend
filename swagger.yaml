@@ -6,6 +6,8 @@ info:
 servers:
   - url: http://localhost:5000/api
     description: Development server
+  - url: https://sabrshukrbackend.onrender.com/api
+    description: Production server
 components:
   securitySchemes:
     bearerAuth:

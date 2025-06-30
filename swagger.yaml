@@ -1757,10 +1757,7 @@ paths:
                           type: string
                           format: date-time
                           example: '2024-06-01T12:34:56.000Z'
-                        email:
-                          type: string
-                          format: email
-                          example: johndoe@example.com
+                    
         '401':
           description: Unauthorized
         '403':

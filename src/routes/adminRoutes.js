@@ -38,6 +38,7 @@ router.delete('/watch-and-shop/:id', adminController.deleteWatchAndShopVideo);
 router.get('/users', adminController.getUsers);
 router.put('/users/:id/block', adminController.blockUser);
 router.put('/users/:id/unblock', adminController.unblockUser);
+router.get('/users/all', adminController.getAllUsers);
 
 // Order Management
 router.get('/orders', adminController.getOrders);

@@ -1723,3 +1723,47 @@ paths:
           description: Review not found
         '500':
           description: Internal Server Error
+  /admin/users/all:
+    get:
+      tags:
+        - Admin User Management
+      summary: Retrieves all users
+      description: Returns all users from the profiles table. Requires an authenticated user with 'admin' role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        full_name:
+                          type: string
+                          example: John Doe
+                        phone_number:
+                          type: string
+                          example: '+1234567890'
+                        created_at:
+                          type: string
+                          format: date-time
+                          example: '2024-06-01T12:34:56.000Z'
+                        email:
+                          type: string
+                          format: email
+                          example: johndoe@example.com
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          description: Internal Server Error

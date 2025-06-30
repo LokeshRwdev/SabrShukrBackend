@@ -512,7 +512,7 @@ exports.getAllUsers = async (req, res, next) => {
   try {
     const { data, error } = await supabaseServiceRole
       .from('profiles')
-      .select('full_name, phone_number, created_at, email');
+      .select('full_name, phone_number, created_at');
     if (error) return res.status(500).json({ success: false, message: error.message });
     return res.json({ success: true, data });
   } catch (err) {

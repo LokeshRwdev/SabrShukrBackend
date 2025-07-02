@@ -40,7 +40,7 @@ exports.getProductById = async (req, res, next) => {
     const { id } = req.params;
     const { data: product, error } = await supabase
       .from('products')
-      .select('*, product_images(*), reviews(*)') // Select all product fields, images, and reviews
+      .select('*, product_images(*), reviews(*), product_variants(*)') // Select all product fields, images, reviews, and product variants
       .eq('id', id)
       .eq('is_published', true)
       .single();

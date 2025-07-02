@@ -5,10 +5,10 @@ exports.placeOrder = async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    // 1. Get user's cart items
+    // 1. Get user's cart items along with variant and product details
     const { data: cartItems, error: cartError } = await supabase
       .from('cart_items')
-      .select('product_id, quantity, products(price)')
+      .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))') // Select variant details
       .eq('user_id', userId);
 
     if (cartError) throw cartError;
@@ -16,18 +16,33 @@ exports.placeOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Cart is empty.' });
     }
 
-    // 2. Calculate total price
+    // 2. Validate stock and calculate total price
     let totalAmount = 0;
     const orderItemsToInsert = [];
+    const stockUpdates = [];
 
     for (const item of cartItems) {
-      const priceAtPurchase = item.products.price;
+      const variant = item.product_variants;
+      if (!variant) {
+        throw new Error(`Variant not found for cart item with variant_id: ${item.variant_id}`);
+      }
+      if (variant.stock_quantity < item.quantity) {
+        return res.status(400).json({ success: false, message: `Not enough stock for ${variant.products.name} (Variant ID: ${variant.id}). Available: ${variant.stock_quantity}, Requested: ${item.quantity}` });
+      }
+
+      const priceAtPurchase = variant.price;
       const itemTotal = priceAtPurchase * item.quantity;
       totalAmount += itemTotal;
       orderItemsToInsert.push({
-        product_id: item.product_id,
+        variant_id: item.variant_id, // Changed from product_id to variant_id
+        product_id: variant.product_id, // Store product_id for reference
         quantity: item.quantity,
         price_at_purchase: priceAtPurchase,
+      });
+
+      stockUpdates.push({
+        id: variant.id,
+        new_stock_quantity: variant.stock_quantity - item.quantity,
       });
     }
 
@@ -62,8 +77,9 @@ exports.placeOrder = async (req, res, next) => {
 
     if (orderError) throw orderError;
 
-    // 5. Create corresponding entries in order_items
     const orderId = newOrder.id;
+
+    // 5. Create corresponding entries in order_items
     const orderItemsWithOrderId = orderItemsToInsert.map(item => ({ ...item, order_id: orderId }));
     const { error: orderItemsError } = await supabase
       .from('order_items')
@@ -71,7 +87,21 @@ exports.placeOrder = async (req, res, next) => {
 
     if (orderItemsError) throw orderItemsError;
 
-    // 6. Delete all items from the user's cart_items
+    // 6. Decrement stock for each product variant
+    for (const update of stockUpdates) {
+      const { error: stockUpdateError } = await supabase
+        .from('product_variants')
+        .update({ stock_quantity: update.new_stock_quantity })
+        .eq('id', update.id);
+      if (stockUpdateError) {
+        // Handle error: potentially revert order and stock changes if this fails
+        console.error(`Failed to update stock for variant ${update.id}:`, stockUpdateError);
+        // For production, you'd likely want to implement a more robust transaction rollback mechanism.
+        throw stockUpdateError; // Re-throw to trigger the catch block
+      }
+    }
+
+    // 7. Delete all items from the user's cart_items
     const { error: deleteCartError } = await supabase
       .from('cart_items')
       .delete()
@@ -90,7 +120,7 @@ exports.getOrders = async (req, res, next) => {
     const userId = req.user.id;
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*, order_items(*, products(name, slug, price, product_images(image_url, is_thumbnail)))')
+      .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image
       .eq('user_id', userId)
       .order('order_date', { ascending: false });
 
@@ -107,7 +137,7 @@ exports.getOrderById = async (req, res, next) => {
     const { id } = req.params;
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*, order_items(*, products(name, slug, price, product_images(image_url, is_thumbnail)))')
+      .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image
       .eq('id', id)
       .eq('user_id', userId) // Ensure user owns the order
       .single();

@@ -49,4 +49,9 @@ router.get('/reviews', adminController.getReviews);
 router.put('/reviews/:id/approve', adminController.approveReview);
 router.delete('/reviews/:id', adminController.deleteReview);
 
+// Product Variant Routes
+router.post('/products/:productId/variants', adminController.createProductVariant);
+router.put('/products/:productId/variants/:variantId', adminController.updateProductVariant);
+router.delete('/products/:productId/variants/:variantId', adminController.deleteProductVariant);
+
 module.exports = router; 

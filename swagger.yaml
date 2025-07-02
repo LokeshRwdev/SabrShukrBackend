@@ -14,6 +14,686 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  schemas:
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        brand:
+          type: string
+        is_published:
+          type: boolean
+        is_featured:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        name: "Premium Yoga Mat"
+        slug: "premium-yoga-mat"
+        description: "A high-quality yoga mat for all levels."
+        brand: "ZenFlow"
+        is_published: true
+        is_featured: false
+        created_at: "2023-01-15T10:00:00Z"
+        updated_at: "2023-01-15T10:00:00Z"
+
+    ProductVariant:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          description: Unique identifier for the product variant.
+        product_id:
+          type: integer
+          description: The ID of the parent product this variant belongs to.
+        price:
+          type: number
+          format: float
+          description: The price of this specific variant.
+          example: 29.99
+        stock_quantity:
+          type: integer
+          description: The quantity of this variant in stock.
+          example: 100
+        sku:
+          type: string
+          nullable: true
+          description: Stock Keeping Unit for this variant.
+          example: "YM-BLUE-S"
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to an image specific to this variant.
+          example: "https://example.com/images/yoga-mat-blue-small.jpg"
+        attributes:
+          type: object
+          nullable: true
+          description: JSONB object storing variant-specific attributes (e.g., color, size).
+          example:
+            color: "Blue"
+            size: "Small"
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+        - product_id
+        - price
+        - stock_quantity
+      example:
+        id: 101
+        product_id: 1
+        price: 29.99
+        stock_quantity: 100
+        sku: "YM-BLUE-S"
+        image_url: "https://example.com/images/yoga-mat-blue-small.jpg"
+        attributes:
+          color: "Blue"
+          size: "Small"
+        created_at: "2023-01-16T11:00:00Z"
+        updated_at: "2023-01-16T11:00:00Z"
+
+    ProductImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product_id:
+          type: integer
+        image_url:
+          type: string
+          format: uri
+        is_thumbnail:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        product_id: 1
+        image_url: "https://example.com/product_main.jpg"
+        is_thumbnail: true
+        created_at: "2023-01-01T12:00:00Z"
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        product_id:
+          type: integer
+        user_id:
+          type: string # UUID or similar
+        rating:
+          type: number
+          format: float
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        product_id: 1
+        user_id: "uuid-user-123"
+        rating: 4.5
+        comment: "Great product, highly recommend!"
+        created_at: "2023-01-05T09:30:00Z"
+
+    ProductWithVariants:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          properties:
+            product_images: # Assuming this is still linked for product-level images
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductImage'
+            reviews:
+              type: array
+              items:
+                $ref: '#/components/schemas/Review'
+            product_variants: # This will contain the variants array
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductVariant'
+          example:
+            product_images:
+              - id: 1
+                product_id: 1
+                image_url: "https://example.com/product_main.jpg"
+                is_thumbnail: true
+                created_at: "2023-01-01T12:00:00Z"
+            reviews:
+              - id: 1
+                product_id: 1
+                user_id: "uuid-user-123"
+                rating: 4.5
+                comment: "Great product, highly recommend!"
+                created_at: "2023-01-05T09:30:00Z"
+            product_variants:
+              - id: 101
+                product_id: 1
+                price: 15.00
+                stock_quantity: 50
+                sku: "ABC-001"
+                image_url: "https://example.com/variant_a.jpg"
+                attributes:
+                  color: "Red"
+                  size: "S"
+              - id: 102
+                product_id: 1
+                price: 20.00
+                stock_quantity: 30
+                sku: "ABC-002"
+                image_url: "https://example.com/variant_b.jpg"
+                attributes:
+                  color: "Blue"
+                  size: "M"
+
+    CreateProductRequest:
+      type: object
+      required:
+        - name
+        - slug
+        - description
+        - brand
+        - isPublished
+        - variants
+      properties:
+        name:
+          type: string
+          description: Name of the product.
+          example: "New Yoga Mat"
+        slug:
+          type: string
+          description: URL-friendly slug for the product.
+          example: "new-yoga-mat"
+        description:
+          type: string
+          description: Detailed description of the product.
+          example: "A durable and eco-friendly yoga mat."
+        brand:
+          type: string
+          description: Brand of the product.
+          example: "EcoYoga"
+        isPublished:
+          type: boolean
+          description: Whether the product is visible to customers.
+          example: true
+        isFeatured:
+          type: boolean
+          description: Whether the product should be featured on the homepage.
+          example: false
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URLs of main product images.
+          example: ["https://example.com/img1.jpg", "https://example.com/img2.jpg"]
+        categoryIds:
+          type: array
+          items:
+            type: integer
+          description: Array of category IDs the product belongs to.
+          example: [1, 5]
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariantInput'
+          minItems: 1
+          description: An array of product variants for this product.
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        brand:
+          type: string
+        isPublished:
+          type: boolean
+        isFeatured:
+          type: boolean
+        imageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        categoryIds:
+          type: array
+          items:
+            type: integer
+      example:
+        name: "Updated Yoga Mat"
+        description: "An even more durable and eco-friendly yoga mat."
+        isPublished: true
+
+    ProductVariantInput:
+      type: object
+      properties:
+        price:
+          type: number
+          format: float
+          description: The price of this specific variant.
+          example: 34.99
+        stock_quantity:
+          type: integer
+          description: The quantity of this variant in stock.
+          example: 75
+        sku:
+          type: string
+          nullable: true
+          description: Stock Keeping Unit for this variant.
+          example: "YM-GREEN-L"
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to an image specific to this variant.
+          example: "https://example.com/images/yoga-mat-green-large.jpg"
+        attributes:
+          type: object
+          nullable: true
+          description: JSONB object storing variant-specific attributes (e.g., color, size).
+          example:
+            color: "Green"
+            size: "Large"
+      required:
+        - price
+        - stock_quantity
+
+    CreateProductVariantRequest:
+      type: object
+      required:
+        - price
+        - stock_quantity
+      properties:
+        price:
+          type: number
+          format: float
+          description: The price of this specific variant.
+          example: 45.00
+        stock_quantity:
+          type: integer
+          description: The quantity of this variant in stock.
+          example: 50
+        sku:
+          type: string
+          nullable: true
+          description: Stock Keeping Unit for this variant.
+          example: "CUSHION-BLUE"
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to an image specific to this variant.
+          example: "https://example.com/images/cushion-blue.jpg"
+        attributes:
+          type: object
+          nullable: true
+          description: JSONB object storing variant-specific attributes (e.g., color, material).
+          example:
+            color: "Blue"
+            material: "Cotton"
+
+    UpdateProductVariantRequest:
+      type: object
+      properties:
+        price:
+          type: number
+          format: float
+          description: The new price of the variant.
+          example: 48.00
+        stock_quantity:
+          type: integer
+          description: The new stock quantity of the variant.
+          example: 45
+        sku:
+          type: string
+          nullable: true
+          description: The new SKU for the variant.
+          example: "CUSHION-BLUE-V2"
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          description: The new image URL for the variant.
+          example: "https://example.com/images/cushion-blue-v2.jpg"
+        attributes:
+          type: object
+          nullable: true
+          description: The new JSONB object for variant attributes.
+          example:
+            color: "Blue"
+            material: "Organic Cotton"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+        full_name:
+          type: string
+        phone_number:
+          type: string
+          nullable: true
+        profile_picture_url:
+          type: string
+          format: uri
+          nullable: true
+        role:
+          type: string
+          enum: [user, admin]
+          default: user
+        is_blocked:
+          type: boolean
+          default: false
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        email: "john.doe@example.com"
+        full_name: "John Doe"
+        phone_number: "+919876543210"
+        profile_picture_url: "https://example.com/profiles/johndoe.jpg"
+        role: "user"
+        is_blocked: false
+        created_at: "2023-01-01T10:00:00Z"
+        updated_at: "2023-01-01T10:00:00Z"
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+        total_amount:
+          type: number
+          format: float
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered, cancelled]
+          default: pending
+        shipping_address_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        user_id: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        total_amount: 150.75
+        status: "processing"
+        shipping_address_id: 101
+        created_at: "2023-03-10T14:30:00Z"
+        updated_at: "2023-03-10T14:30:00Z"
+
+    Banner:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image_url:
+          type: string
+          format: uri
+        target_url:
+          type: string
+          format: uri
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        subtitle:
+          type: string
+          nullable: true
+        order:
+          type: integer
+          description: Display order of the banner
+        is_active:
+          type: boolean
+          default: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        image_url: "https://example.com/banners/banner1.jpg"
+        target_url: "https://example.com/sale"
+        title: "Summer Sale!"
+        subtitle: "Up to 50% off everything"
+        order: 1
+        is_active: true
+        created_at: "2023-01-01T10:00:00Z"
+        updated_at: "2023-01-01T10:00:00Z"
+
+    CreateBannerRequest:
+      type: object
+      required:
+        - image_url
+        - order
+      properties:
+        image_url:
+          type: string
+          format: uri
+        target_url:
+          type: string
+          format: uri
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        subtitle:
+          type: string
+          nullable: true
+        order:
+          type: integer
+          description: Display order of the banner
+        is_active:
+          type: boolean
+          default: true
+      example:
+        image_url: "https://example.com/banners/new_banner.jpg"
+        target_url: "https://example.com/new-collection"
+        title: "New Arrivals"
+        subtitle: "Check out our latest products"
+        order: 2
+        is_active: true
+
+    UpdateBannerRequest:
+      type: object
+      properties:
+        image_url:
+          type: string
+          format: uri
+        target_url:
+          type: string
+          format: uri
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        subtitle:
+          type: string
+          nullable: true
+        order:
+          type: integer
+          description: Display order of the banner
+        is_active:
+          type: boolean
+      example:
+        image_url: "https://example.com/banners/updated_banner.jpg"
+        title: "Updated Sale!"
+        order: 1
+        is_active: false
+
+    WatchAndShopVideo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+        video_url:
+          type: string
+          format: uri
+        description:
+          type: string
+          nullable: true
+        product_links:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: integer
+              timestamp:
+                type: string
+                example: "00:30"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        title: "How to Style Your New Outfit"
+        video_url: "https://www.youtube.com/watch?v=xxxxxxxx"
+        description: "A guide to styling our latest collection."
+        product_links:
+          - product_id: 101
+            timestamp: "00:15"
+          - product_id: 102
+            timestamp: "00:45"
+        created_at: "2023-01-01T10:00:00Z"
+        updated_at: "2023-01-01T10:00:00Z"
+
+    CreateWatchAndShopVideoRequest:
+      type: object
+      required:
+        - title
+        - video_url
+      properties:
+        title:
+          type: string
+        video_url:
+          type: string
+          format: uri
+        description:
+          type: string
+          nullable: true
+        product_links:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: integer
+              timestamp:
+                type: string
+                example: "00:30"
+          nullable: true
+      example:
+        title: "New Product Showcase"
+        video_url: "https://www.youtube.com/watch?v=yyyyyyyy"
+        description: "Introducing our innovative new product."
+        product_links:
+          - product_id: 201
+            timestamp: "01:00"
+
+    UpdateWatchAndShopVideoRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        video_url:
+          type: string
+          format: uri
+        description:
+          type: string
+          nullable: true
+        product_links:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: integer
+              timestamp:
+                type: string
+                example: "00:30"
+          nullable: true
+      example:
+        title: "Updated Styling Guide"
+        video_url: "https://www.youtube.com/watch?v=zzzzzzzz"
+        description: "Revised tips for styling your favorite pieces."
+        product_links:
+          - product_id: 101
+            timestamp: "00:20"
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -41,6 +721,8 @@ tags:
     description: Management of customer orders by administrators
   - name: Admin Review Management
     description: Management of product reviews by administrators
+  - name: Admin Homepage Content Management
+    description: Management of homepage banners and Watch & Shop videos
 paths:
   /auth/register:
     post:
@@ -248,15 +930,14 @@ paths:
     get:
       tags:
         - Products & Categories
-      summary: Gets the full details of a single published product
+      summary: Get details of a single published product, including its variants and reviews
       parameters:
         - in: path
           name: id
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the product to retrieve
+          description: Numeric ID of the product to retrieve
       responses:
         '200':
           description: Successfully retrieved product details
@@ -269,7 +950,7 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: object # Detailed product schema with images and reviews
+                    $ref: '#/components/schemas/ProductWithVariants' # Use new schema
         '404':
           description: Product not found or not published
         '500':
@@ -613,7 +1294,7 @@ paths:
     post:
       tags:
         - Cart
-      summary: Adds an item to the cart or increments its quantity if it already exists
+      summary: Adds a specific product variant to the user's cart
       security:
         - bearerAuth: []
       requestBody:
@@ -622,21 +1303,25 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - variantId
+                - quantity
               properties:
-                productId:
+                variantId:
                   type: integer
-                  format: int64
-                  example: 123
+                  description: The ID of the product variant to add to the cart.
+                  example: 101
                 quantity:
                   type: integer
-                  format: int32
                   minimum: 1
+                  default: 1
+                  description: The quantity of the product variant to add.
                   example: 1
       responses:
         '201':
-          description: Product added to cart or quantity updated successfully
+          description: Item successfully added/updated in cart
         '400':
-          description: Invalid input
+          description: Invalid input or insufficient stock
         '401':
           description: Unauthorized
         '500':
@@ -936,8 +1621,7 @@ paths:
     post:
       tags:
         - Admin APIs
-      summary: Creates a new product
-      description: Requires an authenticated user with 'admin' role.
+      summary: Create a new product with initial variants
       security:
         - bearerAuth: []
       requestBody:
@@ -945,66 +1629,32 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  example: Wellness Yoga Mat
-                slug:
-                  type: string
-                  example: wellness-yoga-mat
-                description:
-                  type: string
-                  example: High-quality, eco-friendly yoga mat for optimal comfort.
-                ingredients:
-                  type: string
-                  example: Natural rubber, organic cotton
-                price:
-                  type: number
-                  format: float
-                  example: 29.99
-                brand:
-                  type: string
-                  example: ZenFlow
-                stockQuantity:
-                  type: integer
-                  example: 100
-                isPublished:
-                  type: boolean
-                  example: true
-                isFeatured:
-                  type: boolean
-                  example: false
-                imageUrls:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                  example:
-                    - https://example.com/mat1.jpg
-                    - https://example.com/mat2.jpg
-                categoryIds:
-                  type: array
-                  items:
-                    type: integer
-                  example: [1, 5]
+              $ref: '#/components/schemas/CreateProductRequest'
       responses:
         '201':
-          description: Product created successfully
+          description: Product and its variants successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductWithVariants'
         '400':
-          description: Invalid input
+          description: Invalid input (e.g., missing variants)
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
-  /admin/products/{id}:
     put:
       tags:
         - Admin APIs
-      summary: Updates an existing product
-      description: Requires an authenticated user with 'admin' role.
+      summary: Update an existing product
       security:
         - bearerAuth: []
       parameters:
@@ -1012,140 +1662,162 @@ paths:
           name: id
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the product to update
+          description: Numeric ID of the product to update
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                slug:
-                  type: string
-                description:
-                  type: string
-                ingredients:
-                  type: string
-                price:
-                  type: number
-                  format: float
-                brand:
-                  type: string
-                stockQuantity:
-                  type: integer
-                isPublished:
-                  type: boolean
-                isFeatured:
-                  type: boolean
-                imageUrls:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                categoryIds:
-                  type: array
-                  items:
-                    type: integer
+              $ref: '#/components/schemas/UpdateProductRequest'
       responses:
         '200':
-          description: Product updated successfully
+          description: Product successfully updated
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+  /admin/products/{productId}/variants:
+    post:
+      tags:
+        - Admin APIs
+      summary: Add a new variant to an existing product
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: productId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product to add a variant to
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductVariantRequest'
+      responses:
+        '201':
+          description: Product variant successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductVariant'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
           description: Product not found
         '500':
           description: Internal Server Error
-    delete:
-      tags:
-        - Admin APIs
-      summary: Deletes a product
-      description: Requires an authenticated user with 'admin' role.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-            format: int64
-          required: true
-          description: ID of the product to delete
-      responses:
-        '200':
-          description: Product deleted successfully
-        '401':
-          description: Unauthorized
-        '403':
-          description: 'Forbidden: Admin access required'
-        '500':
-          description: Internal Server Error
-  /admin/products/{id}/feature:
+  /admin/products/{productId}/variants/{variantId}:
     put:
       tags:
         - Admin APIs
-      summary: Sets a product as featured
-      description: Requires an authenticated user with 'admin' role.
+      summary: Update a specific product variant
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: productId
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the product to feature
+          description: Numeric ID of the parent product
+        - in: path
+          name: variantId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product variant to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductVariantRequest'
       responses:
         '200':
-          description: Product marked as featured
+          description: Product variant successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ProductVariant'
+        '400':
+          description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
-          description: Product not found
+          description: Product variant not found
         '500':
           description: Internal Server Error
     delete:
       tags:
         - Admin APIs
-      summary: Removes a product from featured
-      description: Requires an authenticated user with 'admin' role.
+      summary: Delete a specific product variant
       security:
         - bearerAuth: []
       parameters:
         - in: path
-          name: id
+          name: productId
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the product to unfeature
+          description: Numeric ID of the parent product
+        - in: path
+          name: variantId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product variant to delete
       responses:
         '200':
-          description: Product unfeatured successfully
+          description: Product variant successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Product variant successfully deleted.
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
-          description: Product not found
+          description: Product variant not found
         '500':
           description: Internal Server Error
   /admin/categories:
     post:
       tags:
         - Admin APIs
-      summary: Creates a new category
-      description: Requires an authenticated user with 'admin' role.
+      summary: Create a new category
       security:
         - bearerAuth: []
       requestBody:
@@ -1154,120 +1826,43 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - name
               properties:
                 name:
                   type: string
-                  example: Yoga Apparel
-                slug:
-                  type: string
-                  example: yoga-apparel
+                  example: "New Category"
                 description:
                   type: string
-                  example: Clothing and accessories for yoga practice.
-                imageUrl:
-                  type: string
-                  format: uri
-                  example: https://example.com/yoga-apparel.jpg
-                parentId:
-                  type: integer
-                  format: int64
-                  nullable: true
-                  example: null
-                isActive:
-                  type: boolean
-                  example: true
+                  example: "Products related to new category."
       responses:
         '201':
-          description: Category created successfully
+          description: Category successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Category'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
-        '500':
-          description: Internal Server Error
-  /admin/categories/{id}:
-    put:
-      tags:
-        - Admin APIs
-      summary: Updates an existing category
-      description: Requires an authenticated user with 'admin' role.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-            format: int64
-          required: true
-          description: ID of the category to update
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                slug:
-                  type: string
-                description:
-                  type: string
-                imageUrl:
-                  type: string
-                  format: uri
-                parentId:
-                  type: integer
-                  format: int64
-                  nullable: true
-                isActive:
-                  type: boolean
-      responses:
-        '200':
-          description: Category updated successfully
-        '400':
-          description: Invalid input
-        '401':
-          description: Unauthorized
-        '403':
-          description: 'Forbidden: Admin access required'
-        '404':
-          description: Category not found
-        '500':
-          description: Internal Server Error
-    delete:
-      tags:
-        - Admin APIs
-      summary: Deletes a category
-      description: Requires an authenticated user with 'admin' role.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          schema:
-            type: integer
-            format: int64
-          required: true
-          description: ID of the category to delete
-      responses:
-        '200':
-          description: Category deleted successfully
-        '401':
-          description: Unauthorized
-        '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
+        '409':
+          description: Conflict (Category with this name already exists)
         '500':
           description: Internal Server Error
   /admin/banners:
     get:
       tags:
-        - Admin APIs
-      summary: Retrieves all homepage banners
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Get all banners
       security:
         - bearerAuth: []
       responses:
@@ -1280,22 +1875,20 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   data:
                     type: array
                     items:
-                      type: object # Banner schema
+                      $ref: '#/components/schemas/Banner'
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
     post:
       tags:
-        - Admin APIs
-      summary: Creates a new homepage banner
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Create a new banner
       security:
         - bearerAuth: []
       requestBody:
@@ -1303,48 +1896,32 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                  example: Summer Sale Banner
-                description:
-                  type: string
-                  example: Get up to 50% off on all wellness products this summer!
-                mediaUrl:
-                  type: string
-                  format: uri
-                  example: https://example.com/banner-summer.jpg
-                mediaType:
-                  type: string
-                  enum: [image, video]
-                  example: image
-                linkTo:
-                  type: string
-                  example: /products?sale=summer
-                displayOrder:
-                  type: integer
-                  example: 1
-                isActive:
-                  type: boolean
-                  example: true
+              $ref: '#/components/schemas/CreateBannerRequest'
       responses:
         '201':
-          description: Banner created successfully
+          description: Banner successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Banner'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
   /admin/banners/{id}:
     put:
       tags:
-        - Admin APIs
-      summary: Updates an existing homepage banner
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Update an existing banner
       security:
         - bearerAuth: []
       parameters:
@@ -1352,7 +1929,6 @@ paths:
           name: id
           schema:
             type: integer
-            format: int64
           required: true
           description: ID of the banner to update
       requestBody:
@@ -1360,42 +1936,33 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                description:
-                  type: string
-                mediaUrl:
-                  type: string
-                  format: uri
-                mediaType:
-                  type: string
-                  enum: [image, video]
-                linkTo:
-                  type: string
-                displayOrder:
-                  type: integer
-                isActive:
-                  type: boolean
+              $ref: '#/components/schemas/UpdateBannerRequest'
       responses:
         '200':
-          description: Banner updated successfully
+          description: Banner successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Banner'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
           description: Banner not found
         '500':
           description: Internal Server Error
     delete:
       tags:
-        - Admin APIs
-      summary: Deletes a homepage banner
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Delete a banner
       security:
         - bearerAuth: []
       parameters:
@@ -1403,16 +1970,25 @@ paths:
           name: id
           schema:
             type: integer
-            format: int64
           required: true
           description: ID of the banner to delete
       responses:
         '200':
-          description: Banner deleted successfully
+          description: Banner successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Banner successfully deleted.
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
           description: Banner not found
         '500':
@@ -1420,14 +1996,13 @@ paths:
   /admin/watch-and-shop:
     get:
       tags:
-        - Admin APIs
-      summary: Retrieves all 'Watch and Shop' videos
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Get all Watch & Shop videos
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Successfully retrieved videos
+          description: Successfully retrieved Watch & Shop videos
           content:
             application/json:
               schema:
@@ -1435,22 +2010,20 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   data:
                     type: array
                     items:
-                      type: object # Watch and Shop Video schema
+                      $ref: '#/components/schemas/WatchAndShopVideo'
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
     post:
       tags:
-        - Admin APIs
-      summary: Creates a new 'Watch and Shop' video
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Create a new Watch & Shop video
       security:
         - bearerAuth: []
       requestBody:
@@ -1458,47 +2031,32 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                  example: Yoga Flow for Beginners
-                videoUrl:
-                  type: string
-                  format: uri
-                  example: https://youtube.com/watch?v=yogavideo
-                thumbnailUrl:
-                  type: string
-                  format: uri
-                  example: https://example.com/yoga-thumbnail.jpg
-                productId:
-                  type: integer
-                  format: int64
-                  nullable: true
-                  example: 123
-                displayOrder:
-                  type: integer
-                  example: 1
-                isActive:
-                  type: boolean
-                  example: true
+              $ref: '#/components/schemas/CreateWatchAndShopVideoRequest'
       responses:
         '201':
-          description: Video created successfully
+          description: Watch & Shop video successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/WatchAndShopVideo'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
   /admin/watch-and-shop/{id}:
     put:
       tags:
-        - Admin APIs
-      summary: Updates an existing 'Watch and Shop' video
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Update an existing Watch & Shop video
       security:
         - bearerAuth: []
       parameters:
@@ -1506,50 +2064,40 @@ paths:
           name: id
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the video to update
+          description: ID of the Watch & Shop video to update
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                videoUrl:
-                  type: string
-                  format: uri
-                thumbnailUrl:
-                  type: string
-                  format: uri
-                productId:
-                  type: integer
-                  format: int64
-                  nullable: true
-                displayOrder:
-                  type: integer
-                isActive:
-                  type: boolean
+              $ref: '#/components/schemas/UpdateWatchAndShopVideoRequest'
       responses:
         '200':
-          description: Video updated successfully
+          description: Watch & Shop video successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/WatchAndShopVideo'
         '400':
           description: Invalid input
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
-          description: Video not found
+          description: Watch & Shop video not found
         '500':
           description: Internal Server Error
     delete:
       tags:
-        - Admin APIs
-      summary: Deletes a 'Watch and Shop' video
-      description: Requires an authenticated user with 'admin' role.
+        - Admin Homepage Content Management
+      summary: Delete a Watch & Shop video
       security:
         - bearerAuth: []
       parameters:
@@ -1557,31 +2105,206 @@ paths:
           name: id
           schema:
             type: integer
-            format: int64
           required: true
-          description: ID of the video to delete
+          description: ID of the Watch & Shop video to delete
       responses:
         '200':
-          description: Video deleted successfully
+          description: Watch & Shop video successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Watch & Shop video successfully deleted.
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
-          description: Video not found
+          description: Watch & Shop video not found
+        '500':
+          description: Internal Server Error
+  /admin/users:
+    get:
+      tags:
+        - Admin User Management
+      summary: Get all users with pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Number of users per page
+      responses:
+        '200':
+          description: Successfully retrieved users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  pagination:
+                    type: object
+                    properties:
+                      totalItems:
+                        type: integer
+                      currentPage:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '500':
+          description: Internal Server Error
+  /admin/users/all:
+    get:
+      tags:
+        - Admin User Management
+      summary: Get all users without pagination
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved all users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '500':
+          description: Internal Server Error
+  /admin/users/{id}/block:
+    put:
+      tags:
+        - Admin User Management
+      summary: Blocks a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: ID of the user to block
+      responses:
+        '200':
+          description: User successfully blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: User successfully blocked.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: User not found
+        '500':
+          description: Internal Server Error
+  /admin/users/{id}/unblock:
+    put:
+      tags:
+        - Admin User Management
+      summary: Unblocks a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: ID of the user to unblock
+      responses:
+        '200':
+          description: User successfully unblocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: User successfully unblocked.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: User not found
         '500':
           description: Internal Server Error
   /admin/orders:
     get:
       tags:
         - Admin Order Management
-      summary: Retrieves all customer orders
-      description: Requires an authenticated user with 'admin' role.
+      summary: Get all orders for admin
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Number of orders per page
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, processing, shipped, delivered, cancelled]
+          description: Filter orders by status
       responses:
         '200':
-          description: Successfully retrieved orders
+          description: Successfully retrieved all orders
           content:
             application/json:
               schema:
@@ -1589,23 +2312,30 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   data:
                     type: array
                     items:
-                      type: object # Order schema for admin view
+                      $ref: '#/components/schemas/Order' # Assuming an Order schema exists or will be added
+                  pagination:
+                    type: object
+                    properties:
+                      totalItems:
+                        type: integer
+                      currentPage:
+                        type: integer
+                      totalPages:
+                        type: integer
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
   /admin/orders/{id}/status:
     put:
       tags:
         - Admin Order Management
-      summary: Updates the status of a specific order
-      description: Requires an authenticated user with 'admin' role.
+      summary: Update the status of an order
       security:
         - bearerAuth: []
       parameters:
@@ -1622,6 +2352,8 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - status
               properties:
                 status:
                   type: string
@@ -1630,12 +2362,22 @@ paths:
       responses:
         '200':
           description: Order status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Order status updated to shipped.
         '400':
-          description: Invalid input
+          description: Invalid input or status
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
           description: Order not found
         '500':
@@ -1644,13 +2386,31 @@ paths:
     get:
       tags:
         - Admin Review Management
-      summary: Retrieves all product reviews
-      description: Requires an authenticated user with 'admin' role.
+      summary: Get all reviews for admin
       security:
         - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Number of reviews per page
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+          description: Filter reviews by status
       responses:
         '200':
-          description: Successfully retrieved reviews
+          description: Successfully retrieved all reviews
           content:
             application/json:
               schema:
@@ -1658,23 +2418,30 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   data:
                     type: array
                     items:
-                      type: object # Review schema for admin view
+                      $ref: '#/components/schemas/Review' # Assuming a Review schema exists
+                  pagination:
+                    type: object
+                    properties:
+                      totalItems:
+                        type: integer
+                      currentPage:
+                        type: integer
+                      totalPages:
+                        type: integer
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '500':
           description: Internal Server Error
   /admin/reviews/{id}/approve:
     put:
       tags:
         - Admin Review Management
-      summary: Approves a product review
-      description: Requires an authenticated user with 'admin' role.
+      summary: Approve a review
       security:
         - bearerAuth: []
       parameters:
@@ -1688,10 +2455,20 @@ paths:
       responses:
         '200':
           description: Review approved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Review approved successfully.
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
         '404':
           description: Review not found
         '500':
@@ -1700,8 +2477,7 @@ paths:
     delete:
       tags:
         - Admin Review Management
-      summary: Deletes a product review
-      description: Requires an authenticated user with 'admin' role.
+      summary: Delete a review
       security:
         - bearerAuth: []
       parameters:
@@ -1715,25 +2491,6 @@ paths:
       responses:
         '200':
           description: Review deleted successfully
-        '401':
-          description: Unauthorized
-        '403':
-          description: 'Forbidden: Admin access required'
-        '404':
-          description: Review not found
-        '500':
-          description: Internal Server Error
-  /admin/users/all:
-    get:
-      tags:
-        - Admin User Management
-      summary: Retrieves all users
-      description: Returns all users from the profiles table. Requires an authenticated user with 'admin' role.
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Successfully retrieved users
           content:
             application/json:
               schema:
@@ -1741,26 +2498,14 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        full_name:
-                          type: string
-                          example: John Doe
-                        phone_number:
-                          type: string
-                          example: '+1234567890'
-                        created_at:
-                          type: string
-                          format: date-time
-                          example: '2024-06-01T12:34:56.000Z'
-                    
+                  message:
+                    type: string
+                    example: Review deleted successfully.
         '401':
           description: Unauthorized
         '403':
-          description: 'Forbidden: Admin access required'
+          description: Forbidden (Admin role required)
+        '404':
+          description: Review not found
         '500':
           description: Internal Server Error

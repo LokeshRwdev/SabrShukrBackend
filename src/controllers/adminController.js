@@ -44,12 +44,16 @@ exports.getDashboardStats = async (req, res, next) => {
 
 exports.createProduct = async (req, res, next) => {
   try {
-    const { name, slug, description, ingredients, price, brand, stockQuantity, isPublished, isFeatured, imageUrls, categoryIds } = req.body;
+    const { name, slug, description, brand, isPublished, isFeatured, imageUrls, categoryIds, variants } = req.body;
+
+    if (!variants || variants.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one product variant is required.' });
+    }
 
     const { data: newProduct, error: productError } = await supabaseServiceRole
       .from('products')
       .insert({
-        name, slug, description, ingredients, price, brand, stock_quantity: stockQuantity,
+        name, slug, description, brand,
         is_published: isPublished,
         is_featured: isFeatured,
       })
@@ -83,7 +87,28 @@ exports.createProduct = async (req, res, next) => {
       if (productCategoriesError) throw productCategoriesError;
     }
 
-    res.status(201).json({ success: true, data: newProduct });
+    // Insert product variants
+    const variantsToInsert = variants.map(variant => ({
+      product_id: newProduct.id,
+      price: variant.price,
+      stock_quantity: variant.stock_quantity,
+      sku: variant.sku,
+      image_url: variant.image_url,
+      attributes: variant.attributes,
+    }));
+
+    const { data: newVariants, error: variantsError } = await supabaseServiceRole
+      .from('product_variants')
+      .insert(variantsToInsert)
+      .select();
+
+    if (variantsError) {
+      // If variant creation fails, consider rolling back product creation
+      await supabaseServiceRole.from('products').delete().eq('id', newProduct.id);
+      throw variantsError;
+    }
+
+    res.status(201).json({ success: true, data: { ...newProduct, variants: newVariants } });
   } catch (err) {
     next(err);
   }
@@ -92,12 +117,12 @@ exports.createProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, ingredients, price, brand, stockQuantity, isPublished, isFeatured, imageUrls, categoryIds } = req.body;
+    const { name, slug, description, brand, isPublished, isFeatured, imageUrls, categoryIds } = req.body;
 
     const { data: updatedProduct, error: productError } = await supabaseServiceRole
       .from('products')
       .update({
-        name, slug, description, ingredients, price, brand, stock_quantity: stockQuantity,
+        name, slug, description, brand,
         is_published: isPublished,
         is_featured: isFeatured,
         updated_at: new Date().toISOString(),
@@ -515,6 +540,76 @@ exports.getAllUsers = async (req, res, next) => {
       .select('full_name, phone_number, created_at');
     if (error) return res.status(500).json({ success: false, message: error.message });
     return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Product Variant Management (New API)
+exports.createProductVariant = async (req, res, next) => {
+  try {
+    const { productId } = req.params;
+    const { price, stock_quantity, sku, image_url, attributes } = req.body;
+
+    const { data: newVariant, error } = await supabaseServiceRole
+      .from('product_variants')
+      .insert({
+        product_id: productId,
+        price,
+        stock_quantity,
+        sku,
+        image_url,
+        attributes,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json({ success: true, data: newVariant });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateProductVariant = async (req, res, next) => {
+  try {
+    const { variantId } = req.params;
+    const { price, stock_quantity, sku, image_url, attributes } = req.body;
+
+    const { data: updatedVariant, error } = await supabaseServiceRole
+      .from('product_variants')
+      .update({
+        price,
+        stock_quantity,
+        sku,
+        image_url,
+        attributes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', variantId)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return res.status(404).json({ success: false, message: 'Product variant not found.' });
+      throw error;
+    }
+    res.json({ success: true, data: updatedVariant });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.deleteProductVariant = async (req, res, next) => {
+  try {
+    const { variantId } = req.params;
+    const { error } = await supabaseServiceRole
+      .from('product_variants')
+      .delete()
+      .eq('id', variantId);
+
+    if (error) throw error;
+    res.json({ success: true, message: 'Product variant deleted successfully.' });
   } catch (err) {
     next(err);
   }

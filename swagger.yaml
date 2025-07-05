@@ -694,6 +694,298 @@ components:
           - product_id: 101
             timestamp: "00:20"
 
+    Affiliate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          description: The user ID associated with this affiliate.
+        referral_code:
+          type: string
+          description: Unique code for affiliate referrals.
+        commission_rate:
+          type: number
+          format: float
+          description: Commission rate for the affiliate (e.g., 0.10 for 10%).
+        total_earnings:
+          type: number
+          format: float
+          readOnly: true
+          description: Total earnings accumulated by the affiliate.
+        paid_earnings:
+          type: number
+          format: float
+          readOnly: true
+          description: Total earnings already paid out to the affiliate.
+        pending_payout:
+          type: number
+          format: float
+          readOnly: true
+          description: Earnings pending payout to the affiliate.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: "affiliate-id-123"
+        user_id: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        referral_code: "AFFILIATE123"
+        commission_rate: 0.10
+        total_earnings: 500.75
+        paid_earnings: 300.00
+        pending_payout: 200.75
+        created_at: "2023-01-01T10:00:00Z"
+        updated_at: "2023-01-01T10:00:00Z"
+
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        code:
+          type: string
+          description: The coupon code.
+        discount_type:
+          type: string
+          enum: [percentage, fixed_amount]
+          description: Type of discount (percentage or fixed amount).
+        discount_value:
+          type: number
+          format: float
+          description: The value of the discount (e.g., 0.15 for 15% or 10.00 for $10).
+        minimum_order_amount:
+          type: number
+          format: float
+          nullable: true
+          description: Minimum order amount required to apply the coupon.
+        valid_from:
+          type: string
+          format: date-time
+          description: Date and time from which the coupon is valid.
+        valid_until:
+          type: string
+          format: date-time
+          description: Date and time until which the coupon is valid.
+        usage_limit:
+          type: integer
+          nullable: true
+          description: Maximum number of times the coupon can be used overall.
+        used_count:
+          type: integer
+          readOnly: true
+          description: Number of times the coupon has been used.
+        is_active:
+          type: boolean
+          description: Whether the coupon is currently active.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        code: "SUMMER20"
+        discount_type: "percentage"
+        discount_value: 0.20
+        minimum_order_amount: 50.00
+        valid_from: "2023-06-01T00:00:00Z"
+        valid_until: "2023-08-31T23:59:59Z"
+        usage_limit: 1000
+        used_count: 150
+        is_active: true
+        created_at: "2023-05-20T10:00:00Z"
+        updated_at: "2023-05-20T10:00:00Z"
+
+    ApplyCouponRequest:
+      type: object
+      required:
+        - code
+        - userId
+        - orderId
+        - orderTotal
+      properties:
+        code:
+          type: string
+          description: The coupon code to apply.
+          example: "DISCOUNT10"
+        userId:
+          type: string
+          format: uuid
+          description: The ID of the user applying the coupon.
+          example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        orderId:
+          type: integer
+          description: The ID of the order to which the coupon is being applied.
+          example: 123
+        orderTotal:
+          type: number
+          format: float
+          description: The total amount of the order before discount.
+          example: 150.00
+
+    CouponApplicationResponse:
+      type: object
+      properties:
+        discountAmount:
+          type: number
+          format: float
+          description: The amount discounted by the coupon.
+          example: 15.00
+        newTotalAmount:
+          type: number
+          format: float
+          description: The new total amount after applying the discount.
+          example: 135.00
+        couponId:
+          type: integer
+          description: The ID of the applied coupon.
+          example: 1
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        user_id:
+          type: string
+          format: uuid
+          description: The ID of the user to whom the notification is sent.
+        title:
+          type: string
+          description: Title of the notification.
+        message:
+          type: string
+          description: Full message content of the notification.
+        link_to:
+          type: string
+          format: uri
+          nullable: true
+          description: Optional URL the notification links to.
+        is_read:
+          type: boolean
+          default: false
+          description: Whether the user has read the notification.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        user_id: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+        title: "Order Shipped!"
+        message: "Your order #12345 has been shipped and is on its way."
+        link_to: "https://example.com/orders/12345"
+        is_read: false
+        created_at: "2023-07-20T14:00:00Z"
+        updated_at: "2023-07-20T14:00:00Z"
+
+    CreateNotificationRequest:
+      type: object
+      required:
+        - userId
+        - title
+        - message
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: The ID of the user to whom the notification is sent.
+          example: "a1b2c3d4-e5f6-7890-1234-5677890abcdef"
+        title:
+          type: string
+          description: Title of the notification.
+          example: "Special Offer!"
+        message:
+          type: string
+          description: Full message content of the notification.
+          example: "Get 20% off your next purchase with code SAVE20."
+        link_to:
+          type: string
+          format: uri
+          nullable: true
+          description: Optional URL the notification links to.
+          example: "https://example.com/offers"
+
+    Referral:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        referrer_user_id:
+          type: string
+          format: uuid
+          description: The user ID of the referrer.
+        referred_user_id:
+          type: string
+          format: uuid
+          description: The user ID of the referred user.
+        referral_code_used:
+          type: string
+          description: The referral code that was used.
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          default: pending
+          description: Status of the referral (e.g., pending, completed).
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        referrer_user_id: "uuid-referrer-123"
+        referred_user_id: "uuid-referred-456"
+        referral_code_used: "REFERRALXYZ"
+        status: "pending"
+        created_at: "2023-01-01T10:00:00Z"
+        updated_at: "2023-01-01T10:00:00Z"
+
+    RegisterWithReferralRequest:
+      type: object
+      required:
+        - email
+        - password
+        - fullName
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: strongpassword123
+        fullName:
+          type: string
+          example: John Doe
+        referralCode:
+          type: string
+          description: Optional referral code used during registration.
+          example: "FREESHIP"
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -723,6 +1015,14 @@ tags:
     description: Management of product reviews by administrators
   - name: Admin Homepage Content Management
     description: Management of homepage banners and Watch & Shop videos
+  - name: Affiliate APIs
+    description: Affiliate program management endpoints
+  - name: Coupon APIs
+    description: Coupon management and application endpoints
+  - name: Notifications
+    description: User notification management
+  - name: Referral APIs
+    description: Referral program management endpoints
 paths:
   /auth/register:
     post:
@@ -734,19 +1034,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: user@example.com
-                password:
-                  type: string
-                  format: password
-                  example: strongpassword123
-                fullName:
-                  type: string
-                  example: John Doe
+              $ref: '#/components/schemas/RegisterWithReferralRequest'
       responses:
         '201':
           description: User successfully registered
@@ -1681,6 +1969,109 @@ paths:
           description: Product not found
         '500':
           description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Delete a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product to delete
+      responses:
+        '200':
+          description: Product successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Product successfully deleted.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+  /admin/products/{id}/feature:
+    put:
+      tags:
+        - Admin APIs
+      summary: Feature a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product to feature
+      responses:
+        '200':
+          description: Product successfully featured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message: 
+                    type: string
+                    example: Product successfully featured.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Unfeature a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the product to unfeature
+      responses:
+        '200':
+          description: Product successfully unfeatured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Product successfully unfeatured.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Product not found
+        '500':
+          description: Internal Server Error
   /admin/products/{productId}/variants:
     post:
       tags:
@@ -1856,6 +2247,91 @@ paths:
           description: Forbidden (Admin role required)
         '409':
           description: Conflict (Category with this name already exists)
+        '500':
+          description: Internal Server Error
+    put:
+      tags:
+        - Admin APIs
+      summary: Update an existing category
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the category to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: "Updated Category Name"
+                description:
+                  type: string
+                  example: "Updated description for category."
+      responses:
+        '200':
+          description: Category successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Category successfully updated.
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Category not found
+        '409':
+          description: Conflict (Category with this name already exists)
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Admin APIs
+      summary: Delete a category
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the category to delete
+      responses:
+        '200':
+          description: Category successfully deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Category successfully deleted.
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '404':
+          description: Category not found
         '500':
           description: Internal Server Error
   /admin/banners:
@@ -2509,3 +2985,226 @@ paths:
           description: Review not found
         '500':
           description: Internal Server Error
+  /affiliate/{userId}:
+    get:
+      tags:
+        - Affiliate APIs
+      summary: Get affiliate profile by user ID
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Numeric ID of the user whose affiliate profile to retrieve
+      responses:
+        '200':
+          description: Successfully retrieved affiliate profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Affiliate'
+        '404':
+          description: Affiliate profile not found for the given user ID
+        '500':
+          description: Internal Server Error
+  /coupon/apply:
+    post:
+      tags:
+        - Coupon APIs
+      summary: Apply a coupon code to an order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyCouponRequest'
+      responses:
+        '200':
+          description: Coupon applied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CouponApplicationResponse'
+        '400':
+          description: Invalid input or coupon already applied/invalid
+        '401':
+          description: Unauthorized
+        '404':
+          description: Coupon not found
+        '500':
+          description: Internal Server Error
+  /coupon/{id}:
+    get:
+      tags:
+        - Coupon APIs
+      summary: Get details of a single coupon by ID
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: Numeric ID of the coupon to retrieve
+      responses:
+        '200':
+          description: Successfully retrieved coupon details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Coupon'
+        '404':
+          description: Coupon not found
+        '500':
+          description: Internal Server Error
+  /coupon:
+    get:
+      tags:
+        - Coupon APIs
+      summary: Lists all active coupons
+      responses:
+        '200':
+          description: Successfully retrieved active coupons
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Coupon'
+        '500':
+          description: Internal Server Error
+  /notifications/{userId}:
+    get:
+      tags:
+        - Notifications
+      summary: Get all notifications for a specific user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The ID of the user to retrieve notifications for.
+      responses:
+        '200':
+          description: Successfully retrieved user notifications.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+        '401':
+          description: Unauthorized.
+        '403':
+          description: Forbidden (User ID does not match authenticated user or admin access required).
+        '404':
+          description: User not found.
+        '500':
+          description: Internal Server Error.
+  /notifications:
+    post:
+      tags:
+        - Notifications
+      summary: Create a new notification (Admin Only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNotificationRequest'
+      responses:
+        '201':
+          description: Notification successfully created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Notification'
+        '400':
+          description: Invalid input.
+        '401':
+          description: Unauthorized.
+        '403':
+          description: Forbidden (Admin role required).
+        '500':
+          description: Internal Server Error.
+  /referrals/{userId}:
+    get:
+      tags:
+        - Referral APIs
+      summary: Get all referrals for a specific user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The ID of the user to retrieve referrals for.
+      responses:
+        '200':
+          description: Successfully retrieved user referrals.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Referral'
+        '401':
+          description: Unauthorized.
+        '403':
+          description: Forbidden (User ID does not match authenticated user or admin access required).
+        '404':
+          description: User not found.
+        '500':
+          description: Internal Server Error.

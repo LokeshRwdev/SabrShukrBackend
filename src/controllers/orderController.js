@@ -1,4 +1,5 @@
 const supabase = require('../utils/supabaseClient');
+const affiliateController = require('./affiliateController'); // Import affiliate controller
 
 exports.placeOrder = async (req, res, next) => {
   const { shippingAddressId } = req.body;
@@ -108,6 +109,25 @@ exports.placeOrder = async (req, res, next) => {
       .eq('user_id', userId);
 
     if (deleteCartError) throw deleteCartError;
+
+    // Handle affiliate conversion if tracking code is present in session/cookies
+    const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode; // Adjust based on your session/cookie mechanism
+    if (affiliateTrackingCode) {
+      // 1. Find affiliate ID by tracking code
+      const { data: affiliateData, error: affiliateLookupError } = await supabase
+        .from('affiliates')
+        .select('id')
+        .eq('tracking_code', affiliateTrackingCode)
+        .single();
+
+      if (!affiliateLookupError && affiliateData) {
+        const affiliateId = affiliateData.id;
+        // Call the affiliate conversion handler
+        await affiliateController.handleAffiliateConversion(orderId, affiliateId, newOrder.total_amount);
+      } else {
+        console.warn(`Affiliate tracking code ${affiliateTrackingCode} not found or invalid.`);
+      }
+    }
 
     res.status(201).json({ success: true, message: 'Order placed successfully!', order: newOrder });
   } catch (err) {

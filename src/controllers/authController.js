@@ -2,7 +2,7 @@ const supabase = require('../utils/supabaseClient');
 
 exports.register = async (req, res, next) => {
   try {
-    const { email, password, fullName } = req.body;
+    const { email, password, fullName, referralCode } = req.body;
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -11,6 +11,29 @@ exports.register = async (req, res, next) => {
       },
     });
     if (error) return next(error);
+
+    // If referralCode is present, create a referral entry
+    if (referralCode && data && data.user) {
+      // 1. Find referrer by referral code (assuming profiles table has referral_code column)
+      const { data: referrerProfile, error: referrerError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('referral_code', referralCode)
+        .single();
+      if (!referrerError && referrerProfile) {
+        // 2. Create referral entry
+        await supabase
+          .from('referrals')
+          .insert({
+            referrer_id: referrerProfile.id,
+            referred_id: data.user.id,
+            referral_code: referralCode,
+            status: 'pending',
+          });
+      }
+      // If referral code is invalid, just ignore (do not block signup)
+    }
+
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);

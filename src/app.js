@@ -48,6 +48,18 @@ app.use("/api/payment", paymentRoutes);
 const adminRoutes = require("./routes/adminRoutes");
 app.use("/api/admin", adminRoutes);
 
+const couponRoutes = require("./routes/couponRoutes");
+app.use("/api/coupons", couponRoutes);
+
+const referralRoutes = require("./routes/referralRoutes");
+app.use("/api/referrals", referralRoutes);
+
+const notificationRoutes = require("./routes/notificationRoutes");
+app.use("/api/notifications", notificationRoutes);
+
+const affiliateRoutes = require("./routes/affiliateRoutes");
+app.use("/api/affiliates", affiliateRoutes);
+
 // Error handling middleware (to be implemented)
 const errorHandler = require("./middlewares/errorHandler");
 app.use(errorHandler);

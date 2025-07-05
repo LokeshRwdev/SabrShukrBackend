@@ -4,9 +4,10 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const validate = require('../middlewares/validate');
 const { registerSchema, loginSchema, socialLoginSchema } = require('../validators/authSchemas');
+const { registerWithReferralSchema } = require('../validators/referralSchemas');
 
 // POST /api/auth/register
-router.post('/register', validate(registerSchema), authController.register);
+router.post('/register', validate(registerWithReferralSchema), authController.register);
 
 // POST /api/auth/login
 router.post('/login', validate(loginSchema), authController.login);

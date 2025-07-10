@@ -986,6 +986,31 @@ components:
           description: Optional referral code used during registration.
           example: "FREESHIP"
 
+    otpLoginRequest:
+      type: object
+      required:
+        - phone
+        - otp
+      properties:
+        phone:
+          type: string
+          description: Phone number in E.164 format (e.g., +919876543210)
+          example: "+919876543210"
+        otp:
+          type: string
+          description: The OTP code sent to the user's phone
+          example: "123456"
+
+    sendOtpRequest:
+      type: object
+      required:
+        - phone
+      properties:
+        phone:
+          type: string
+          description: Phone number in E.164 format (e.g., +919876543210)
+          example: "+919876543210"
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -3208,3 +3233,66 @@ paths:
           description: User not found.
         '500':
           description: Internal Server Error.
+  /auth/loginwithOtp:
+    post:
+      tags:
+        - Auth
+      summary: Log in a user using phone number and OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/otpLoginRequest'
+      responses:
+        '200':
+          description: User successfully logged in with OTP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Supabase session/user data
+        '400':
+          description: Invalid input or OTP
+        '401':
+          description: Invalid credentials or OTP
+        '500':
+          description: Internal Server Error
+  /auth/sendOtp:
+    post:
+      tags:
+        - Auth
+      summary: Send an OTP to a user's phone number for login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/sendOtpRequest'
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent successfully
+                  data:
+                    type: object
+                    description: Supabase response data
+        '400':
+          description: Invalid input or phone number
+        '500':
+          description: Internal Server Error

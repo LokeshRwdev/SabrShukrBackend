@@ -13,4 +13,13 @@ exports.loginSchema = Joi.object({
 
 exports.socialLoginSchema = Joi.object({
   provider: Joi.string().valid('google', 'facebook').required(),
+});
+
+exports.otpLoginSchema = Joi.object({
+  phone: Joi.string().required(),
+  otp: Joi.string().required(),
+});
+
+exports.sendOtpSchema = Joi.object({
+  phone: Joi.string().required(),
 }); 

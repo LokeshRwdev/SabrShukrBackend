@@ -73,4 +73,32 @@ exports.socialLogin = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+exports.loginWithOtp = async (req, res, next) => {
+  try {
+    const { phone, otp } = req.body;
+    // Supabase expects phone in E.164 format (e.g., +919876543210)
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone,
+      token: otp,
+      type: 'sms',
+    });
+    if (error) return next(error);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.sendOtp = async (req, res, next) => {
+  try {
+    const { phone } = req.body;
+    // Supabase will send an OTP to this phone number
+    const { data, error } = await supabase.auth.signInWithOtp({ phone });
+    if (error) return next(error);
+    res.json({ success: true, message: 'OTP sent successfully', data });
+  } catch (err) {
+    next(err);
+  }
 }; 

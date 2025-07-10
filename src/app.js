@@ -9,14 +9,15 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:8080",
   "https://admin.sabrshukr.store",
-  "https://sabrshukr.store"
+  "https://sabrshukr.store",
+  "http://localhost:5000",
+  'sabrshukrbackend.onrender.com'
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // Allow non-browser requests
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       } else {

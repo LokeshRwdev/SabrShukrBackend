@@ -11,7 +11,8 @@ const allowedOrigins = [
   "https://admin.sabrshukr.store",
   "https://sabrshukr.store",
   "http://localhost:5000",
-  'sabrshukrbackend.onrender.com'
+  "https://sabrshukrbackend.onrender.com",
+  "http://localhost:3000",
 ];
 
 app.use(

@@ -1,16 +1,16 @@
-const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config(); // Make sure to load environment variables
+const { createClient } = require("@supabase/supabase-js");
 
-// Check if environment variables are loaded
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  throw new Error("Supabase URL or Anon Key is missing from .env file");
-}
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Create a single Supabase client for your application
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
+const supabaseServiceRole = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: { persistSession: false },
+});
 
-// IMPORTANT: Export the client
-module.exports = { supabase };
+module.exports = supabase ;
+module.exports.serviceRole = supabaseServiceRole;

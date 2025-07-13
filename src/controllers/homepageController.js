@@ -1,5 +1,5 @@
 // Ensure the path to your client file is correct
-const { supabase } = require('../utils/supabaseClient'); 
+const supabase  = require('../utils/supabaseClient'); 
 
 exports.getHomepage = async (req, res, next) => {
   try {

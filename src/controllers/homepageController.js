@@ -1,9 +1,14 @@
-// Make sure you have your Supabase client initialized
-const { supabase } = require('../utils/supabaseClient');
+// Ensure the path to your client file is correct
+const { supabase } = require('../utils/supabaseClient'); 
 
 exports.getHomepage = async (req, res, next) => {
   try {
-    // Fetch active banners (No changes needed here)
+    // This check helps confirm the client is loaded.
+    if (!supabase) {
+      throw new Error("Supabase client is not initialized.");
+    }
+
+    // Fetch active banners
     const { data: banners, error: bannersError } = await supabase
       .from('banners')
       .select('*')
@@ -12,7 +17,6 @@ exports.getHomepage = async (req, res, next) => {
     if (bannersError) throw bannersError;
 
     // Fetch active "watch and shop" videos
-    // FIX: Changed the nested select for products to get variants instead of price.
     const { data: watchAndShopVideos, error: videosError } = await supabase
       .from('watch_and_shop_videos')
       .select(`
@@ -29,7 +33,6 @@ exports.getHomepage = async (req, res, next) => {
     if (videosError) throw videosError;
 
     // Fetch featured products
-    // FIX: Changed select to get product_variants instead of a direct 'price' column.
     const { data: featuredProducts, error: productsError } = await supabase
       .from('products')
       .select(`
@@ -45,7 +48,7 @@ exports.getHomepage = async (req, res, next) => {
       .eq('is_featured', true);
     if (productsError) throw productsError;
 
-    // Fetch active parent categories (No changes needed here)
+    // Fetch active parent categories
     const { data: parentCategories, error: categoriesError } = await supabase
       .from('categories')
       .select('id, name, slug, description, image_url')
@@ -63,6 +66,7 @@ exports.getHomepage = async (req, res, next) => {
       },
     });
   } catch (err) {
+    // Pass the error to your global error handler
     next(err);
-s  }
+  }
 };

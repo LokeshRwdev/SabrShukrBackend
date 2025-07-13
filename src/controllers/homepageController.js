@@ -1,8 +1,9 @@
-const supabase = require('../utils/supabaseClient');
+// Make sure you have your Supabase client initialized
+const { supabase } = require('../utils/supabaseClient');
 
 exports.getHomepage = async (req, res, next) => {
   try {
-    // Fetch active banners
+    // Fetch active banners (No changes needed here)
     const { data: banners, error: bannersError } = await supabase
       .from('banners')
       .select('*')
@@ -11,22 +12,40 @@ exports.getHomepage = async (req, res, next) => {
     if (bannersError) throw bannersError;
 
     // Fetch active "watch and shop" videos
+    // FIX: Changed the nested select for products to get variants instead of price.
     const { data: watchAndShopVideos, error: videosError } = await supabase
       .from('watch_and_shop_videos')
-      .select('*, products(name, slug, price, product_images(image_url, is_thumbnail))')
+      .select(`
+        *,
+        products (
+          name,
+          slug,
+          product_images(image_url, is_thumbnail),
+          product_variants(price)
+        )
+      `)
       .eq('is_active', true)
       .order('display_order', { ascending: true });
     if (videosError) throw videosError;
 
     // Fetch featured products
+    // FIX: Changed select to get product_variants instead of a direct 'price' column.
     const { data: featuredProducts, error: productsError } = await supabase
       .from('products')
-      .select('id, name, slug, description, price, brand, product_images(image_url, is_thumbnail)')
+      .select(`
+        id,
+        name,
+        slug,
+        description,
+        brand,
+        product_images(image_url, is_thumbnail),
+        product_variants(id, price, attributes)
+      `)
       .eq('is_published', true)
       .eq('is_featured', true);
     if (productsError) throw productsError;
 
-    // Fetch active parent categories (where parent_id is NULL or not set)
+    // Fetch active parent categories (No changes needed here)
     const { data: parentCategories, error: categoriesError } = await supabase
       .from('categories')
       .select('id, name, slug, description, image_url')
@@ -45,5 +64,5 @@ exports.getHomepage = async (req, res, next) => {
     });
   } catch (err) {
     next(err);
-  }
-}; 
+s  }
+};

@@ -76,6 +76,10 @@ app.use("/api/notifications", notificationRoutes);
 const affiliateRoutes = require("./routes/affiliateRoutes");
 app.use("/api/affiliates", affiliateRoutes);
 
+// Add Deal of the Day routes
+const dealRoutes = require("./routes/dealRoutes");
+app.use("/api", dealRoutes);
+
 // Error handling middleware (to be implemented)
 const errorHandler = require("./middlewares/errorHandler");
 app.use(errorHandler);

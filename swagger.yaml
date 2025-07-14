@@ -1011,6 +1011,63 @@ components:
           description: Phone number in E.164 format (e.g., +919876543210)
           example: "+919876543210"
 
+    DealOfTheDay:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        product_variant_id:
+          type: integer
+          format: int64
+        deal_price:
+          type: number
+          format: float
+        deal_title:
+          type: string
+        is_active:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+      example:
+        id: 1
+        product_variant_id: 101
+        deal_price: 999.00
+        deal_title: "Monsoon Special: 50% Off!"
+        is_active: true
+        expires_at: "2025-07-20T23:59:59Z"
+    DealOfTheDayCreateRequest:
+      type: object
+      properties:
+        variantId:
+          type: integer
+          format: int64
+          example: 101
+        dealPrice:
+          type: number
+          format: float
+          example: 999.00
+        dealTitle:
+          type: string
+          example: "Monsoon Special: 50% Off!"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2025-07-20T23:59:59Z"
+      required: [variantId, dealPrice, dealTitle, expiresAt]
+    DealOfTheDayUpdateRequest:
+      type: object
+      properties:
+        dealPrice:
+          type: number
+          format: float
+          example: 950.00
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2025-07-21T23:59:59Z"
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -1048,6 +1105,8 @@ tags:
     description: User notification management
   - name: Referral APIs
     description: Referral program management endpoints
+  - name: Deal of the Day
+    description: Deal of the Day feature endpoints
 paths:
   /auth/register:
     post:
@@ -3294,5 +3353,193 @@ paths:
                     description: Supabase response data
         '400':
           description: Invalid input or phone number
+        '500':
+          description: Internal Server Error
+  /admin/deals:
+    post:
+      tags: [Admin APIs, Deal of the Day]
+      summary: Create a new Deal of the Day and set it as active
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealOfTheDayCreateRequest'
+      responses:
+        '201':
+          description: Deal of the Day created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Deal of the Day created successfully.
+                  data:
+                    $ref: '#/components/schemas/DealOfTheDay'
+        '500':
+          description: Internal Server Error
+    get:
+      tags: [Admin APIs, Deal of the Day]
+      summary: List all deals (active and inactive)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all deals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DealOfTheDay'
+        '500':
+          description: Internal Server Error
+  /admin/deals/{id}:
+    put:
+      tags: [Admin APIs, Deal of the Day]
+      summary: Update an existing deal
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the deal to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DealOfTheDayUpdateRequest'
+      responses:
+        '200':
+          description: Deal updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Deal updated successfully.
+        '500':
+          description: Internal Server Error
+    delete:
+      tags: [Admin APIs, Deal of the Day]
+      summary: Delete a deal
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the deal to delete
+      responses:
+        '200':
+          description: Deal deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Deal deleted successfully.
+        '500':
+          description: Internal Server Error
+  /deal-of-the-day:
+    get:
+      tags: [Deal of the Day]
+      summary: Fetch the currently active Deal of the Day (public)
+      responses:
+        '200':
+          description: The current active deal, or null if none
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    nullable: true
+                    properties:
+                      deal_id:
+                        type: integer
+                        example: 1
+                      deal_title:
+                        type: string
+                        example: "Monsoon Special: 50% Off!"
+                      deal_price:
+                        type: number
+                        example: 999.00
+                      expires_at:
+                        type: string
+                        format: date-time
+                        example: "2025-07-20T23:59:59Z"
+                      product:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 5
+                          name:
+                            type: string
+                            example: "Premium Yoga Mat"
+                          slug:
+                            type: string
+                            example: "premium-yoga-mat"
+                          description:
+                            type: string
+                            example: "A high-quality, non-slip mat."
+                          images:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                image_url:
+                                  type: string
+                                  example: "https://example.com/img1.jpg"
+                      variant:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                            example: 101
+                          original_price:
+                            type: number
+                            example: 1500.00
+                          attributes:
+                            type: object
+                            example:
+                              color: "Blue"
+                              size: "Standard"
         '500':
           description: Internal Server Error

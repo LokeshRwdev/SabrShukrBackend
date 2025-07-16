@@ -82,66 +82,69 @@ exports.deleteDeal = async (req, res) => {
 };
 
 // User: Get current active deal (with product and variant details)
-exports.getActiveDeal = async (req, res) => {
-  const now = new Date().toISOString();
-  // 1. Get active deal
-  const { data: deal, error } = await supabase
-    .from('deal_of_the_day')
-    .select(`
-      id,
-      deal_title,
-      deal_price,
-      expires_at,
-      product_variant_id,
-      product_variant:product_variants!inner(
+exports.getActiveDeal = async (req, res, next) => {
+  try {
+    const now = new Date().toISOString();
+
+    // The main query to get the active deal
+    const { data: deal, error } = await supabase
+      .from('deal_of_the_day')
+      .select(`
         id,
-        original_price,
-        attributes,
-        product:products(
+        deal_title,
+        deal_price,
+        expires_at,
+        product_variants!inner (
           id,
-          name,
-          slug,
-          description,
-          images:image_urls(image_url)
+          price, 
+          attributes,
+          products!inner (
+            id,
+            name,
+            slug,
+            description,
+            product_images (image_url, is_thumbnail) 
+          )
         )
-      )
-    `)
-    .eq('is_active', true)
-    .gt('expires_at', now)
-    .maybeSingle();
-  if (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-  if (!deal) {
-    return res.status(200).json({ success: true, data: null });
-  }
-  // Format response
-  const variant = deal.product_variant;
-  const product = variant?.product;
-  return res.status(200).json({
-    success: true,
-    data: {
+      `)
+      .eq('is_active', true)
+      .gt('expires_at', now)
+      .maybeSingle(); // Use maybeSingle() to get one record or null
+
+    if (error) {
+      // If there's an error, pass it to the error handler
+      throw error;
+    }
+
+    if (!deal) {
+      // If no active deal is found, return a success response with null data
+      return res.status(200).json({ success: true, data: null });
+    }
+
+    // Format the response to match the desired structure
+    const formattedResponse = {
       deal_id: deal.id,
       deal_title: deal.deal_title,
       deal_price: deal.deal_price,
       expires_at: deal.expires_at,
-      product: product
-        ? {
-            id: product.id,
-            name: product.name,
-            slug: product.slug,
-            description: product.description,
-            images: product.images || [],
-          }
-        : null,
-      variant: variant
-        ? {
-            id: variant.id,
-            original_price: variant.original_price,
-            attributes: variant.attributes,
-          }
-        : null,
-    },
-  });
-}; 
+      product: {
+        id: deal.product_variants.products.id,
+        name: deal.product_variants.products.name,
+        slug: deal.product_variants.products.slug,
+        description: deal.product_variants.products.description,
+        images: deal.product_variants.products.product_images || [],
+      },
+      variant: {
+        id: deal.product_variants.id,
+        original_price: deal.product_variants.price, // The original price from the variant table
+        attributes: deal.product_variants.attributes,
+      },
+    };
 
+    return res.status(200).json({ success: true, data: formattedResponse });
+
+  } catch (err) {
+    // Pass any unexpected errors to the global error handler
+    next(err);
+  }
+};

@@ -1068,6 +1068,74 @@ components:
           format: date-time
           example: "2025-07-21T23:59:59Z"
 
+    ProductSearchResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        brand:
+          type: string
+        product_images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+      example:
+        id: 1
+        name: "Eco-Friendly Water Bottle"
+        slug: "eco-friendly-water-bottle"
+        description: "Stay hydrated with this sustainable water bottle."
+        price: 19.99
+        brand: "GreenLife"
+        product_images:
+          - image_url: "https://example.com/water-bottle.jpg"
+            is_thumbnail: true
+
+    RecommendedProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        product_images:
+          type: array
+          items:
+            type: object
+            properties:
+              image_url:
+                type: string
+                format: uri
+              is_thumbnail:
+                type: boolean
+        product_variants:
+          type: array
+          items:
+            type: object
+            properties:
+              price:
+                type: number
+                format: float
+      example:
+        id: 2
+        name: "Organic Cotton T-Shirt"
+        slug: "organic-cotton-t-shirt"
+        product_images:
+          - image_url: "https://example.com/t-shirt.jpg"
+            is_thumbnail: true
+        product_variants:
+          - price: 25.00
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -1107,6 +1175,9 @@ tags:
     description: Referral program management endpoints
   - name: Deal of the Day
     description: Deal of the Day feature endpoints
+  - name: Products
+    description: Product-related operations
+
 paths:
   /auth/register:
     post:
@@ -1341,7 +1412,7 @@ paths:
           description: Search query string (e.g., product name, description, brand)
       responses:
         '200':
-          description: Successfully retrieved search results
+          description: A list of products matching the search query.
           content:
             application/json:
               schema:
@@ -1349,15 +1420,14 @@ paths:
                 properties:
                   success:
                     type: boolean
-                    example: true
                   data:
                     type: array
                     items:
-                      type: object # Product search result schema
+                      $ref: '#/components/schemas/ProductSearchResult'
         '400':
-          description: Search query parameter (q) is required
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: Internal Server Error
+          $ref: '#/components/responses/ServerError'
   /categories:
     get:
       tags:
@@ -3543,3 +3613,41 @@ paths:
                               size: "Standard"
         '500':
           description: Internal Server Error
+  /products/{id}/recommendations:
+    get:
+      tags:
+        - Products
+      summary: Get recommended products based on a given product's category.
+      description: Retrieves a list of products that are in the same category as the specified product, excluding the product itself.
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+          required: true
+          description: Unique ID of the product to get recommendations for.
+          example: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 5
+          required: false
+          description: Maximum number of recommended products to return.
+          example: 3
+      responses:
+        '200':
+          description: A list of recommended products.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecommendedProduct'
+        '500':
+          $ref: '#/components/responses/ServerError'

@@ -147,3 +147,57 @@ exports.searchProducts = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.getProductRecommendations = async (req, res, next) => {
+  try {
+    const { id } = req.params; // The ID of the product being viewed
+    const limit = parseInt(req.query.limit) || 5; // Default to 5 recommendations
+
+    // Step 1: Find the category ID of the current product.
+    // We only need one category to find similar products.
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('product_categories')
+      .select('category_id')
+      .eq('product_id', id)
+      .limit(1)
+      .single(); // Use .single() to get one object, not an array
+
+    if (categoryError || !categoryData) {
+      // If the product has no category, we can't find recommendations.
+      // Return an empty array.
+      return res.json({ success: true, data: [] });
+    }
+
+    const targetCategoryId = categoryData.category_id;
+
+    // Step 2: Find other products in the same category.
+    // - Join through product_categories to filter by the target category.
+    // - Exclude the original product itself using .neq('id', id).
+    // - Limit the results.
+    const { data: recommendations, error: recommendationsError } = await supabase
+      .from('products')
+      .select(`
+        id,
+        name,
+        slug,
+        product_images(image_url, is_thumbnail),
+        product_variants(price)
+      `)
+      .eq('is_published', true)
+      .neq('id', id) // Exclude the current product
+      .in('id', 
+        supabase
+          .from('product_categories')
+          .select('product_id')
+          .eq('category_id', targetCategoryId)
+      )
+      .limit(limit);
+
+    if (recommendationsError) throw recommendationsError;
+
+    return res.json({ success: true, data: recommendations });
+
+  } catch (err) {
+    next(err);
+  }
+};

@@ -150,30 +150,42 @@ exports.searchProducts = async (req, res, next) => {
 
 exports.getProductRecommendations = async (req, res, next) => {
   try {
-    const { id } = req.params; // The ID of the product being viewed
+    const { id: currentProductId } = req.params; // The ID of the product being viewed
     const limit = parseInt(req.query.limit) || 5; // Default to 5 recommendations
 
     // Step 1: Find the category ID of the current product.
-    // We only need one category to find similar products.
     const { data: categoryData, error: categoryError } = await supabase
       .from('product_categories')
       .select('category_id')
-      .eq('product_id', id)
+      .eq('product_id', currentProductId)
       .limit(1)
-      .single(); // Use .single() to get one object, not an array
+      .single();
 
     if (categoryError || !categoryData) {
       // If the product has no category, we can't find recommendations.
-      // Return an empty array.
       return res.json({ success: true, data: [] });
     }
 
     const targetCategoryId = categoryData.category_id;
 
-    // Step 2: Find other products in the same category.
-    // - Join through product_categories to filter by the target category.
-    // - Exclude the original product itself using .neq('id', id).
-    // - Limit the results.
+    // Step 2: Get a list of all product IDs in that same category, excluding the current one.
+    const { data: recommendedIdsData, error: idsError } = await supabase
+      .from('product_categories')
+      .select('product_id')
+      .eq('category_id', targetCategoryId)
+      .neq('product_id', currentProductId); // Exclude the current product ID
+
+    if (idsError) throw idsError;
+
+    // If no other products are in the category, return an empty array.
+    if (!recommendedIdsData || recommendedIdsData.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const recommendedIds = recommendedIdsData.map(p => p.product_id);
+
+    // Step 3: Now, fetch the full details for that clean list of product IDs.
+    // This query is now much simpler for the database to execute.
     const { data: recommendations, error: recommendationsError } = await supabase
       .from('products')
       .select(`
@@ -181,16 +193,10 @@ exports.getProductRecommendations = async (req, res, next) => {
         name,
         slug,
         product_images(image_url, is_thumbnail),
-        product_variants(price)
+        product_variants(id, price, attributes)
       `)
       .eq('is_published', true)
-      .neq('id', id) // Exclude the current product
-      .in('id', 
-        supabase
-          .from('product_categories')
-          .select('product_id')
-          .eq('category_id', targetCategoryId)
-      )
+      .in('id', recommendedIds) // Use the clean array of IDs
       .limit(limit);
 
     if (recommendationsError) throw recommendationsError;

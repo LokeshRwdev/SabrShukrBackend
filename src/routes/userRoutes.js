@@ -14,5 +14,6 @@ router.put('/profile', userController.updateProfile);
 router.get('/addresses', addressController.getAddresses);
 router.post('/addresses', addressController.addAddress);
 router.put('/addresses/:id', addressController.updateAddress);
+router.delete('/addresses/:id', addressController.deleteAddress);
 
 module.exports = router; 

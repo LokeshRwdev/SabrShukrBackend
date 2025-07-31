@@ -17,10 +17,13 @@ exports.getWishlist = async (req, res, next) => {
 
 exports.addToWishlist = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    // This comes from your auth middleware and is correct.
+    const userId = req.user.id; 
     const { productId } = req.body;
 
-    const { data: newWishlistItem, error } = await supabase
+    // CRITICAL: Use the standard 'supabase' client here, NOT 'supabaseServiceRole'.
+    // The standard client operates within the logged-in user's context.
+    const { data: newWishlistItem, error } = await supabase 
       .from('wishlist_items')
       .insert({
         user_id: userId,
@@ -29,16 +32,20 @@ exports.addToWishlist = async (req, res, next) => {
       .select();
 
     if (error) {
-      if (error.code === '23505') { // Unique violation, item already in wishlist
+      // Your existing error handling for duplicates is excellent.
+      if (error.code === '23505') { 
         return res.status(409).json({ success: false, message: 'Product already in wishlist.' });
       }
+      // For any other database error, throw it to the catch block.
       throw error;
     }
+
     res.status(201).json({ success: true, data: newWishlistItem[0] });
   } catch (err) {
     next(err);
   }
 };
+
 
 exports.removeFromWishlist = async (req, res, next) => {
   try {

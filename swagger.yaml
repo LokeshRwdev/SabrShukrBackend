@@ -1630,6 +1630,40 @@ paths:
           description: Address not found or does not belong to user
         '500':
           description: Internal Server Error
+    delete:
+      tags:
+        - User Profile & Addresses
+      summary: Deletes a specific shipping address
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: integer
+            format: int64
+          required: true
+          description: ID of the address to delete
+      responses:
+        '200':
+          description: Address deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Address deleted successfully.
+        '401':
+          description: Unauthorized
+        '404':
+          description: Address not found or does not belong to user
+        '500':
+          description: Internal Server Error
   /user/wishlist:
     get:
       tags:

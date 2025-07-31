@@ -111,3 +111,33 @@ exports.updateAddress = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.deleteAddress = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const token = req.headers['authorization']?.split(' ')[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    const { error } = await supabase
+      .from('addresses')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId);
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ success: false, message: 'Address not found or does not belong to user.' });
+      }
+      throw error;
+    }
+
+    res.json({ success: true, message: 'Address deleted successfully.' });
+  } catch (err) {
+    next(err);
+  }
+};

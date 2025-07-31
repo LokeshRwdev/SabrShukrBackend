@@ -1,9 +1,16 @@
-const supabase = require('../utils/supabaseClient');
+const { createClient } = require("@supabase/supabase-js");
+const supabase = require("../utils/supabaseClient");
 
 exports.getCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { data: cartItems, error } = await supabase
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabaseWithAuth = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+    const { data: cartItems, error } = await supabaseWithAuth
       .from('cart_items')
       .select('*, product_variants(*, products(*, product_images(*)))')
       .eq('user_id', userId);
@@ -19,9 +26,15 @@ exports.addToCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { variantId, quantity } = req.body;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabaseWithAuth = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
 
     // Fetch the variant details to ensure it exists and get its stock
-    const { data: variant, error: variantFetchError } = await supabase
+    const { data: variant, error: variantFetchError } = await supabaseWithAuth
       .from('product_variants')
       .select('*, products(name)')
       .eq('id', variantId)
@@ -39,7 +52,7 @@ exports.addToCart = async (req, res, next) => {
     }
 
     // Check if the variant already exists in the cart
-    const { data: existingCartItem, error: fetchError } = await supabase
+    const { data: existingCartItem, error: fetchError } = await supabaseWithAuth
       .from('cart_items')
       .select('id, quantity')
       .eq('user_id', userId)
@@ -57,14 +70,14 @@ exports.addToCart = async (req, res, next) => {
       if (newQuantity > variant.stock_quantity) {
         return res.status(400).json({ success: false, message: `Cannot add more. Only ${variant.stock_quantity} in stock for this variant.` });
       }
-      result = await supabase
+      result = await supabaseWithAuth
         .from('cart_items')
         .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
         .eq('id', existingCartItem.id)
         .select();
     } else {
       // Insert new item if it doesn't exist
-      result = await supabase
+      result = await supabaseWithAuth
         .from('cart_items')
         .insert({
           user_id: userId,
@@ -85,6 +98,12 @@ exports.updateCartItem = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { variantId, quantity } = req.body;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabaseWithAuth = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
 
     if (quantity <= 0) {
       // If quantity is 0 or less, remove the item from the cart
@@ -92,7 +111,7 @@ exports.updateCartItem = async (req, res, next) => {
     }
 
     // Fetch the variant details to ensure it exists and get its stock
-    const { data: variant, error: variantFetchError } = await supabase
+    const { data: variant, error: variantFetchError } = await supabaseWithAuth
       .from('product_variants')
       .select('stock_quantity')
       .eq('id', variantId)
@@ -109,7 +128,7 @@ exports.updateCartItem = async (req, res, next) => {
       return res.status(400).json({ success: false, message: `Requested quantity exceeds available stock (${variant.stock_quantity}).` });
     }
 
-    const { data: updatedCartItem, error } = await supabase
+    const { data: updatedCartItem, error } = await supabaseWithAuth
       .from('cart_items')
       .update({ quantity, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
@@ -132,8 +151,14 @@ exports.removeFromCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { variantId } = req.params;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabaseWithAuth = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
 
-    const { error } = await supabase
+    const { error } = await supabaseWithAuth
       .from('cart_items')
       .delete()
       .eq('user_id', userId)

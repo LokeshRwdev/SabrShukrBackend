@@ -1,8 +1,15 @@
-const supabase = require('../utils/supabaseClient');
+const { createClient } = require('@supabase/supabase-js');
 
 exports.getAddresses = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const token = req.headers['authorization']?.split(' ')[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
     const { data: addresses, error } = await supabase
       .from('addresses')
       .select('*')
@@ -19,16 +26,19 @@ exports.getAddresses = async (req, res, next) => {
 exports.addAddress = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    
-    // FIX 2: Changed variable names to match your payload
+    const token = req.headers['authorization']?.split(' ')[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
     const { address, addressLine2, city, state, zipCode, country, isDefault } = req.body;
 
-    // This check is important to prevent errors if the payload is wrong
     if (!address || !city || !state || !zipCode || !country) {
-        return res.status(400).json({ success: false, message: "Missing required address fields." });
+      return res.status(400).json({ success: false, message: "Missing required address fields." });
     }
 
-    // FIX 1: Ensure this UPDATE call uses the standard 'supabase' client
     if (isDefault) {
       await supabase
         .from('addresses')
@@ -37,22 +47,20 @@ exports.addAddress = async (req, res, next) => {
         .eq('is_default', true);
     }
 
-    // FIX 1: Ensure this INSERT call also uses the standard 'supabase' client
     const { data: newAddress, error } = await supabase
       .from('addresses')
       .insert({
         user_id: userId,
-        // FIX 2: Use the correct variable names for insertion
-        address_line_1: address, 
+        address_line_1: address,
         address_line_2: addressLine2,
         city,
         state,
-        pincode: zipCode, // Map zipCode to the pincode column
+        pincode: zipCode,
         country,
         is_default: isDefault || false,
       })
       .select()
-      .single(); // Use .single() since you expect one object back
+      .single();
 
     if (error) throw error;
 
@@ -60,7 +68,7 @@ exports.addAddress = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}
+};
 
 exports.updateAddress = async (req, res, next) => {
   try {
@@ -69,7 +77,6 @@ exports.updateAddress = async (req, res, next) => {
     const { addressLine1, addressLine2, city, state, pincode, country, isDefault } = req.body;
 
     if (isDefault) {
-      // If this address is set as default, unset previous defaults for this user
       await supabase
         .from('addresses')
         .update({ is_default: false })
@@ -94,7 +101,7 @@ exports.updateAddress = async (req, res, next) => {
       .select();
 
     if (error) {
-      if (error.code === 'PGRST116') { // No rows found to update
+      if (error.code === 'PGRST116') {
         return res.status(404).json({ success: false, message: 'Address not found or does not belong to user.' });
       }
       throw error;
@@ -103,4 +110,4 @@ exports.updateAddress = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}; 
+};

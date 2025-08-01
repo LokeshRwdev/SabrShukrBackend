@@ -2,7 +2,7 @@ const affiliateController = require('./affiliateController'); // Import affiliat
 const { createClient } = require('@supabase/supabase-js');
 
 exports.placeOrder = async (req, res, next) => {
-  const { shippingAddressId } = req.body;
+  const { shippingAddressId, paymentMethod } = req.body;
   const userId = req.user.id;
   const token = req.headers["authorization"]?.split(" ")[1];
   const supabaseWithAuth = createClient(
@@ -77,7 +77,8 @@ exports.placeOrder = async (req, res, next) => {
         total_amount: totalAmount,
         final_amount: totalAmount, // Assuming no discount for now
         status: 'pending',
-        payment_status: 'pending',
+        payment_status: paymentMethod === 'COD' ? 'completed' : 'pending', // Set to completed for COD
+        payment_method: paymentMethod, // Store payment method
       })
       .select()
       .single();

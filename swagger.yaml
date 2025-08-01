@@ -1900,11 +1900,19 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - shippingAddressId
+                - paymentMethod
               properties:
                 shippingAddressId:
                   type: integer
                   format: int64
                   example: 1
+                paymentMethod:
+                  type: string
+                  enum: [COD, Online]
+                  description: Method of payment for the order (Cash On Delivery or Online Payment).
+                  example: COD
       responses:
         '201':
           description: Order placed successfully

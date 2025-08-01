@@ -33,10 +33,10 @@ exports.addAddress = async (req, res, next) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const { address, addressLine2, city, state, zipCode, country, isDefault } =
+    const { addressLine1, addressLine2, city, state, pincode, country, isDefault, fullName, phone } =
       req.body;
 
-    if (!address || !city || !state || !zipCode || !country) {
+    if (!addressLine1 || !city || !state || !pincode || !country || !fullName || !phone) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required address fields." });
@@ -54,13 +54,15 @@ exports.addAddress = async (req, res, next) => {
       .from("addresses")
       .insert({
         user_id: userId,
-        address_line_1: address,
+        address_line_1: addressLine1,
         address_line_2: addressLine2,
         city,
         state,
-        pincode: zipCode,
+        pincode,
         country,
         is_default: isDefault || false,
+        full_name: fullName,
+        phone_number: phone,
       })
       .select()
       .single();
@@ -91,6 +93,8 @@ exports.updateAddress = async (req, res, next) => {
       pincode,
       country,
       isDefault,
+      fullName,
+      phone,
     } = req.body;
 
     if (isDefault) {
@@ -111,6 +115,8 @@ exports.updateAddress = async (req, res, next) => {
         pincode,
         country,
         is_default: isDefault || false,
+        full_name: fullName,
+        phone_number: phone,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

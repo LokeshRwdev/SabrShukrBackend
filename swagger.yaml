@@ -1136,6 +1136,79 @@ components:
         product_variants:
           - price: 25.00
 
+    CreateAddressRequest:
+      type: object
+      required:
+        - addressLine1
+        - city
+        - state
+        - pincode
+        - country
+        - fullName
+        - phone
+      properties:
+        addressLine1:
+          type: string
+          example: 123 Main St
+        addressLine2:
+          type: string
+          example: Apt 4B
+          nullable: true
+        city:
+          type: string
+          example: Someville
+        state:
+          type: string
+          example: StateName
+        pincode:
+          type: string
+          example: "123456"
+        country:
+          type: string
+          example: India
+        isDefault:
+          type: boolean
+          example: true
+          default: false
+        fullName:
+          type: string
+          example: John Doe
+        phone:
+          type: string
+          example: "+919876543210"
+
+    UpdateAddressRequest:
+      type: object
+      properties:
+        addressLine1:
+          type: string
+          example: 123 New St
+        addressLine2:
+          type: string
+          example: Suite 1A
+          nullable: true
+        city:
+          type: string
+          example: Another Town
+        state:
+          type: string
+          example: NewState
+        pincode:
+          type: string
+          example: "654321"
+        country:
+          type: string
+          example: India
+        isDefault:
+          type: boolean
+          example: false
+        fullName:
+          type: string
+          example: Jane Doe
+        phone:
+          type: string
+          example: "+919876543210"
+
 tags:
   - name: Auth
     description: User authentication and authorization
@@ -1544,29 +1617,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                addressLine1:
-                  type: string
-                  example: 123 Main St
-                addressLine2:
-                  type: string
-                  example: Apt 4B
-                city:
-                  type: string
-                  example: Someville
-                state:
-                  type: string
-                  example: StateName
-                pincode:
-                  type: string
-                  example: "123456"
-                country:
-                  type: string
-                  example: India
-                isDefault:
-                  type: boolean
-                  example: true
+              $ref: '#/components/schemas/CreateAddressRequest'
       responses:
         '201':
           description: Address added successfully
@@ -1596,29 +1647,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                addressLine1:
-                  type: string
-                  example: 123 New St
-                addressLine2:
-                  type: string
-                  example: Suite 1A
-                city:
-                  type: string
-                  example: Another Town
-                state:
-                  type: string
-                  example: NewState
-                pincode:
-                  type: string
-                  example: "654321"
-                country:
-                  type: string
-                  example: India
-                isDefault:
-                  type: boolean
-                  example: false
+              $ref: '#/components/schemas/UpdateAddressRequest'
       responses:
         '200':
           description: Address updated successfully

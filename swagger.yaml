@@ -1799,7 +1799,7 @@ paths:
     post:
       tags:
         - Cart
-      summary: Adds a specific product variant to the user's cart
+      summary: Adds multiple product variants to the user\'s cart or updates quantities
       security:
         - bearerAuth: []
       requestBody:
@@ -1809,24 +1809,64 @@ paths:
             schema:
               type: object
               required:
-                - variantId
-                - quantity
+                - items
               properties:
-                variantId:
-                  type: integer
-                  description: The ID of the product variant to add to the cart.
-                  example: 101
-                quantity:
-                  type: integer
-                  minimum: 1
-                  default: 1
-                  description: The quantity of the product variant to add.
-                  example: 1
+                items:
+                  type: array
+                  description: An array of product variants to add or update in the cart.
+                  items:
+                    type: object
+                    required:
+                      - variantId
+                      - quantity
+                    properties:
+                      variantId:
+                        type: integer
+                        description: The ID of the product variant.
+                        example: 101
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        description: The quantity of the product variant.
+                        example: 1
+                  example:
+                    - variantId: 101
+                      quantity: 2
+                    - variantId: 102
+                      quantity: 1
       responses:
-        '201':
-          description: Item successfully added/updated in cart
+        '200':
+          description: Successfully processed all cart item additions/updates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        variantId:
+                          type: integer
+                          description: The ID of the product variant that was processed.
+                          example: 101
+                        success:
+                          type: boolean
+                          description: Indicates if the operation for this specific variant was successful.
+                          example: true
+                        message:
+                          type: string
+                          description: A message detailing the outcome of the operation (e.g., error message).
+                          example: "Item successfully added/updated in cart"
+                        data:
+                          type: object
+                          description: The updated cart item data if successful.
         '400':
-          description: Invalid input or insufficient stock
+          description: Invalid input or insufficient stock for one or more items
         '401':
           description: Unauthorized
         '500':

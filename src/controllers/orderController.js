@@ -1,13 +1,19 @@
-const supabase = require('../utils/supabaseClient');
 const affiliateController = require('./affiliateController'); // Import affiliate controller
+const { createClient } = require('@supabase/supabase-js');
 
 exports.placeOrder = async (req, res, next) => {
   const { shippingAddressId } = req.body;
   const userId = req.user.id;
+  const token = req.headers["authorization"]?.split(" ")[1];
+  const supabaseWithAuth = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
 
   try {
     // 1. Get user's cart items along with variant and product details
-    const { data: cartItems, error: cartError } = await supabase
+    const { data: cartItems, error: cartError } = await supabaseWithAuth
       .from('cart_items')
       .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))') // Select variant details
       .eq('user_id', userId);
@@ -48,7 +54,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // 3. Get shipping address details (snapshot)
-    const { data: shippingAddress, error: addressError } = await supabase
+    const { data: shippingAddress, error: addressError } = await supabaseWithAuth
       .from('addresses')
       .select('*')
       .eq('id', shippingAddressId)
@@ -63,7 +69,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // 4. Create an entry in the orders table
-    const { data: newOrder, error: orderError } = await supabase
+    const { data: newOrder, error: orderError } = await supabaseWithAuth
       .from('orders')
       .insert({
         user_id: userId,
@@ -82,7 +88,7 @@ exports.placeOrder = async (req, res, next) => {
 
     // 5. Create corresponding entries in order_items
     const orderItemsWithOrderId = orderItemsToInsert.map(item => ({ ...item, order_id: orderId }));
-    const { error: orderItemsError } = await supabase
+    const { error: orderItemsError } = await supabaseWithAuth
       .from('order_items')
       .insert(orderItemsWithOrderId);
 
@@ -90,7 +96,7 @@ exports.placeOrder = async (req, res, next) => {
 
     // 6. Decrement stock for each product variant
     for (const update of stockUpdates) {
-      const { error: stockUpdateError } = await supabase
+      const { error: stockUpdateError } = await supabaseWithAuth
         .from('product_variants')
         .update({ stock_quantity: update.new_stock_quantity })
         .eq('id', update.id);
@@ -103,7 +109,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // 7. Delete all items from the user's cart_items
-    const { error: deleteCartError } = await supabase
+    const { error: deleteCartError } = await supabaseWithAuth
       .from('cart_items')
       .delete()
       .eq('user_id', userId);
@@ -114,7 +120,7 @@ exports.placeOrder = async (req, res, next) => {
     const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode; // Adjust based on your session/cookie mechanism
     if (affiliateTrackingCode) {
       // 1. Find affiliate ID by tracking code
-      const { data: affiliateData, error: affiliateLookupError } = await supabase
+      const { data: affiliateData, error: affiliateLookupError } = await supabaseWithAuth
         .from('affiliates')
         .select('id')
         .eq('tracking_code', affiliateTrackingCode)

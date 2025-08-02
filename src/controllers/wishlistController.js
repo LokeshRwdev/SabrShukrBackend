@@ -4,6 +4,12 @@ const { createClient } = require("@supabase/supabase-js");
 exports.getWishlist = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
     const { data: wishlistItems, error } = await supabase
       .from('wishlist_items')
       .select('*, products(*, product_images(*))')

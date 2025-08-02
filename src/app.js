@@ -75,6 +75,9 @@ app.use("/api/notifications", notificationRoutes);
 const affiliateRoutes = require("./routes/affiliateRoutes");
 app.use("/api/affiliates", affiliateRoutes);
 
+const wishlistRoutes = require("./routes/wishlistRoutes");
+app.use("/api/user/wishlist", wishlistRoutes);
+
 // Add Deal of the Day routes
 const dealRoutes = require("./routes/dealRoutes");
 app.use("/api", dealRoutes);

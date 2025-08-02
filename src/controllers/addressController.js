@@ -33,16 +33,16 @@ exports.addAddress = async (req, res, next) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const { addressLine1, addressLine2, city, state, pincode, country, isDefault, fullName, phone } =
+    const { address_line_1, address_line_2, city, state, pincode, country, is_default, full_name, phone_number } =
       req.body;
 
-    if (!addressLine1 || !city || !state || !pincode || !country || !fullName || !phone) {
+    if (!address_line_1 || !city || !state || !pincode || !country || !full_name || !phone_number) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required address fields." });
     }
 
-    if (isDefault) {
+    if (is_default) {
       await supabase
         .from("addresses")
         .update({ is_default: false })
@@ -54,15 +54,15 @@ exports.addAddress = async (req, res, next) => {
       .from("addresses")
       .insert({
         user_id: userId,
-        address_line_1: addressLine1,
-        address_line_2: addressLine2,
+        address_line_1,
+        address_line_2,
         city,
         state,
         pincode,
         country,
-        is_default: isDefault || false,
-        full_name: fullName,
-        phone_number: phone,
+        is_default: is_default || false,
+        full_name,
+        phone_number,
       })
       .select()
       .single();
@@ -86,18 +86,18 @@ exports.updateAddress = async (req, res, next) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
     const {
-      addressLine1,
-      addressLine2,
+      address_line_1,
+      address_line_2,
       city,
       state,
       pincode,
       country,
-      isDefault,
-      fullName,
-      phone,
+      is_default,
+      full_name,
+      phone_number,
     } = req.body;
 
-    if (isDefault) {
+    if (is_default) {
       await supabase
         .from("addresses")
         .update({ is_default: false })
@@ -108,15 +108,15 @@ exports.updateAddress = async (req, res, next) => {
     const { data: updatedAddress, error } = await supabase
       .from("addresses")
       .update({
-        address_line_1: addressLine1,
-        address_line_2: addressLine2,
+        address_line_1,
+        address_line_2,
         city,
         state,
         pincode,
         country,
-        is_default: isDefault || false,
-        full_name: fullName,
-        phone_number: phone,
+        is_default: is_default || false,
+        full_name,
+        phone_number,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)

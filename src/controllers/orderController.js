@@ -145,6 +145,12 @@ exports.placeOrder = async (req, res, next) => {
 exports.getOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
     const { data: orders, error } = await supabase
       .from('orders')
       .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image
@@ -162,6 +168,12 @@ exports.getOrderById = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
     const { data: order, error } = await supabase
       .from('orders')
       .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image

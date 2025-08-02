@@ -1,4 +1,5 @@
 const supabase = require('../utils/supabaseClient');
+const { createClient } = require("@supabase/supabase-js");
 
 exports.getWishlist = async (req, res, next) => {
   try {
@@ -19,6 +20,12 @@ exports.addToWishlist = async (req, res, next) => {
   try {
     // This comes from your auth middleware and is correct.
     const userId = req.user.id; 
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
     const { productId } = req.body;
 
     // CRITICAL: Use the standard 'supabase' client here, NOT 'supabaseServiceRole'.

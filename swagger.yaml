@@ -1139,18 +1139,18 @@ components:
     CreateAddressRequest:
       type: object
       required:
-        - addressLine1
+        - address_line_1
         - city
         - state
         - pincode
         - country
-        - fullName
-        - phone
+        - full_name
+        - phone_number
       properties:
-        addressLine1:
+        address_line_1:
           type: string
           example: 123 Main St
-        addressLine2:
+        address_line_2:
           type: string
           example: Apt 4B
           nullable: true
@@ -1166,24 +1166,24 @@ components:
         country:
           type: string
           example: India
-        isDefault:
+        is_default:
           type: boolean
           example: true
           default: false
-        fullName:
+        full_name:
           type: string
           example: John Doe
-        phone:
+        phone_number:
           type: string
           example: "+919876543210"
 
     UpdateAddressRequest:
       type: object
       properties:
-        addressLine1:
+        address_line_1:
           type: string
           example: 123 New St
-        addressLine2:
+        address_line_2:
           type: string
           example: Suite 1A
           nullable: true
@@ -1199,13 +1199,13 @@ components:
         country:
           type: string
           example: India
-        isDefault:
+        is_default:
           type: boolean
           example: false
-        fullName:
+        full_name:
           type: string
           example: Jane Doe
-        phone:
+        phone_number:
           type: string
           example: "+919876543210"
 

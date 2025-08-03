@@ -1,6 +1,7 @@
 const supabase = require('../utils/supabaseClient');
 const { createClient } = require("@supabase/supabase-js");
 
+
 exports.getWishlist = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -12,10 +13,22 @@ exports.getWishlist = async (req, res, next) => {
     );
     const { data: wishlistItems, error } = await supabase
       .from('wishlist_items')
-      .select('*, products(*, product_images(*))')
+      .select(`
+        id,
+        created_at,
+        products (
+          id,
+          name,
+          slug,
+          brand,
+          product_images (image_url, is_thumbnail),
+          product_variants (id, price, attributes)
+        )
+      `)
       .eq('user_id', userId);
 
     if (error) throw error;
+    
     res.json({ success: true, data: wishlistItems });
   } catch (err) {
     next(err);

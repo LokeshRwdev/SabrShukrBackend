@@ -96,3 +96,27 @@ exports.removeFromWishlist = async (req, res, next) => {
     next(err);
   }
 }; 
+
+exports.getWishlistedProductIds = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    const { data: wishlistItems, error } = await supabase
+      .from('wishlist_items')
+      .select('product_id')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    const productIds = wishlistItems.map(item => item.product_id);
+    res.json({ success: true, data: productIds });
+  } catch (err) {
+    next(err);
+  }
+}; 

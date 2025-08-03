@@ -76,6 +76,12 @@ exports.addToWishlist = async (req, res, next) => {
 exports.removeFromWishlist = async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
     const { productId } = req.params;
 
     const { error } = await supabase

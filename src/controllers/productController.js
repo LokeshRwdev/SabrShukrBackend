@@ -132,9 +132,15 @@ exports.searchProducts = async (req, res, next) => {
     const searchTerm = `%${q.toLowerCase()}%`;
     const { data: products, error } = await supabase
       .from("products")
-      .select(
-        "id, name, slug, description, price, brand, product_images(image_url, is_thumbnail)"
-      )
+      .select(`
+        id,
+        name,
+        slug,
+        description,
+        brand,
+        product_images(image_url, is_thumbnail),
+        product_variants(id, price, stock_quantity, attributes)
+      `)
       .eq("is_published", true)
       .or(
         `name.ilike.${searchTerm},description.ilike.${searchTerm},brand.ilike.${searchTerm}`

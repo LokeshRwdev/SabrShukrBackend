@@ -105,3 +105,59 @@ exports.paymentWebhook = async (req, res, next) => {
     res.status(403).json({ success: false, message: 'Invalid signature' });
   }
 }; 
+
+exports.verifyPayment = async (req, res, next) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !orderId) {
+      return res.status(400).json({ success: false, message: 'Missing required parameters.' });
+    }
+
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generatedSignature = hmac.digest('hex');
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({ success: false, message: 'Invalid signature.' });
+    }
+
+    // Fetch order amount for record keeping
+    const { data: order, error: orderError } = await supabaseServiceRole
+      .from('orders')
+      .select('final_amount')
+      .eq('id', orderId)
+      .single();
+
+    if (orderError) {
+      if (orderError.code === 'PGRST116') {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      throw orderError;
+    }
+
+    // Update order status
+    await supabaseServiceRole
+      .from('orders')
+      .update({ payment_status: 'paid', status: 'processing' })
+      .eq('id', orderId);
+
+    // Record payment details
+    await supabaseServiceRole
+      .from('payments')
+      .insert({
+        order_id: orderId,
+        payment_gateway_transaction_id: razorpay_payment_id,
+        amount: order.final_amount,
+        status: 'captured',
+        payment_method: 'razorpay',
+        payment_gateway_response: { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+      });
+
+    return res.json({ success: true, verified: true });
+  } catch (err) {
+    next(err);
+  }
+}; 
+

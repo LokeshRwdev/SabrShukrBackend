@@ -30,6 +30,11 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(
+  "/api/payment/webhook",
+  express.raw({ type: "application/json" }) // capture raw body
+);
 app.use(express.json());
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));

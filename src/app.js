@@ -5,6 +5,8 @@ const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const swaggerDocument = YAML.load("./swagger.yaml");
 const app = express();
+const bodyParser = require("body-parser");
+const path = require("path");
 
 const allowedOrigins = [
   "http://localhost:8080",
@@ -30,6 +32,10 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname)));
 
 app.use(
   "/api/payment/webhook",

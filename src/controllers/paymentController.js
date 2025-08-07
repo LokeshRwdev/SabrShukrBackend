@@ -152,40 +152,41 @@ exports.paymentWebhook = async (req, res, next) => {
 
 exports.verifyPayment = async (req, res, next) => {
   try {
+    // Expect snake_case keys from client
     const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
+      order_id,
+      payment_id,
+      signature,
       orderId,
     } = req.body;
 
-    if (
-      !razorpay_order_id ||
-      !razorpay_payment_id ||
-      !razorpay_signature ||
-      !orderId
-    ) {
+    const rpOrderId = order_id;
+    const rpPaymentId = payment_id;
+    const rpSignature = signature;
+    const internalOrderId = orderId;
+
+        if (!rpOrderId || !rpPaymentId || !rpSignature || !internalOrderId) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required parameters." });
     }
 
-    const secret = process.env.RAZORPAY_KEY_SECRET;
-    const hmac = crypto.createHmac("sha256", secret);
-    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const generatedSignature = hmac.digest("hex");
+        const secret = process.env.RAZORPAY_KEY_SECRET;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(`${rpOrderId}|${rpPaymentId}`);
+    const generatedSignature = hmac.digest('hex');
 
-    if (generatedSignature !== razorpay_signature) {
+    if (generatedSignature !== rpSignature) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid signature." });
     }
 
     // Fetch order amount for record keeping
-    const { data: order, error: orderError } = await supabaseServiceRole
-      .from("orders")
-      .select("final_amount")
-      .eq("id", orderId)
+        const { data: order, error: orderError } = await supabaseServiceRole
+      .from('orders')
+      .select('final_amount')
+      .eq('id', internalOrderId)
       .single();
 
     if (orderError) {
@@ -198,22 +199,22 @@ exports.verifyPayment = async (req, res, next) => {
     }
 
     // Update order status
-    await supabaseServiceRole
-      .from("orders")
-      .update({ payment_status: "paid", status: "processing" })
-      .eq("id", orderId);
+        await supabaseServiceRole
+      .from('orders')
+      .update({ payment_status: 'paid', status: 'processing' })
+      .eq('id', internalOrderId);
 
     // Record payment details
-    await supabaseServiceRole.from("payments").insert({
-      order_id: orderId,
-      payment_gateway_transaction_id: razorpay_payment_id,
+        await supabaseServiceRole.from('payments').insert({
+      order_id: internalOrderId,
+      payment_gateway_transaction_id: rpPaymentId,
       amount: order.final_amount,
-      status: "captured",
-      payment_method: "razorpay",
+      status: 'captured',
+      payment_method: 'razorpay',
       payment_gateway_response: {
-        razorpay_order_id,
-        razorpay_payment_id,
-        razorpay_signature,
+        razorpay_order_id: rpOrderId,
+        razorpay_payment_id: rpPaymentId,
+        razorpay_signature: rpSignature,
       },
     });
 

@@ -33,14 +33,15 @@ app.use(
   })
 );
 
+// Raw body parser for Razorpay webhook (must be above JSON parsers)
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
+
+// Global parsers for other routes
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
 app.use(express.static(path.join(__dirname)));
 
-app.use(
-  "/api/payment/webhook",
-  express.raw({ type: "application/json" }) // capture raw body
-);
 app.use(express.json());
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));

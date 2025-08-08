@@ -814,8 +814,6 @@ components:
       required:
         - code
         - userId
-        - orderId
-        - orderTotal
       properties:
         code:
           type: string
@@ -826,15 +824,6 @@ components:
           format: uuid
           description: The ID of the user applying the coupon.
           example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
-        orderId:
-          type: integer
-          description: The ID of the order to which the coupon is being applied.
-          example: 123
-        orderTotal:
-          type: number
-          format: float
-          description: The total amount of the order before discount.
-          example: 150.00
 
     CouponApplicationResponse:
       type: object
@@ -3364,7 +3353,7 @@ paths:
           description: Affiliate profile not found for the given user ID
         '500':
           description: Internal Server Error
-  /coupon/apply:
+  /coupons/apply:
     post:
       tags:
         - Coupon APIs
@@ -3398,7 +3387,41 @@ paths:
           description: Coupon not found
         '500':
           description: Internal Server Error
-  /coupon/{id}:
+  /coupons/unapply:
+    post:
+      tags:
+        - Coupon APIs
+      summary: Unapply a coupon code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyCouponRequest'
+      responses:
+        '200':
+          description: Coupon unapplied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      unapplied:
+                        type: boolean
+                        example: true
+        '404':
+          description: Coupon not found
+        '500':
+          description: Internal Server Error
+  /coupons/{id}:
     get:
       tags:
         - Coupon APIs
@@ -3423,12 +3446,103 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: '#/components/schemas/Coupon'
+                    $ref: '#/components/schemas/Coupons'
         '404':
           description: Coupon not found
         '500':
           description: Internal Server Error
-  /coupon:
+    put:
+      tags:
+        - Coupon APIs
+      summary: Replace/update a coupon (Admin Only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                description:
+                  type: string
+                discount_type:
+                  type: string
+                  enum: [percentage, fixed_amount]
+                discount_value:
+                  type: number
+                min_purchase_amount:
+                  type: number
+                max_uses:
+                  type: integer
+                  nullable: true
+                max_uses_per_user:
+                  type: integer
+                starts_at:
+                  type: string
+                  format: date-time
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Coupon updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Coupons'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+    delete:
+      tags:
+        - Coupon APIs
+      summary: Delete a coupon (Admin Only)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Coupon deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+  /coupons:
     get:
       tags:
         - Coupon APIs
@@ -3447,7 +3561,76 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Coupon'
+                      $ref: '#/components/schemas/Coupons'
+        '500':
+          description: Internal Server Error
+    post:
+      tags:
+        - Coupon APIs
+      summary: Create a new coupon (Admin Only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  maxLength: 50
+                  example: SUMMER20
+                description:
+                  type: string
+                  example: 20% off summer sale
+                discount_type:
+                  type: string
+                  enum: [percentage, fixed_amount]
+                discount_value:
+                  type: number
+                  format: float
+                  example: 20
+                min_purchase_amount:
+                  type: number
+                  format: float
+                  example: 500
+                max_uses:
+                  type: integer
+                  nullable: true
+                  example: 1000
+                max_uses_per_user:
+                  type: integer
+                  example: 1
+                starts_at:
+                  type: string
+                  format: date-time
+                expires_at:
+                  type: string
+                  format: date-time
+                  nullable: true
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Coupon created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Coupons'
+        '400':
+          description: Bad Request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '500':
           description: Internal Server Error
   /notifications/{userId}:

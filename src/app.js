@@ -94,6 +94,10 @@ app.use("/api/user/wishlist", wishlistRoutes);
 const dealRoutes = require("./routes/dealRoutes");
 app.use("/api", dealRoutes);
 
+// Upload routes
+const uploadRoutes = require("./routes/uploadRoutes");
+app.use("/api/upload", uploadRoutes);
+
 // Error handling middleware (to be implemented)
 const errorHandler = require("./middlewares/errorHandler");
 app.use(errorHandler);

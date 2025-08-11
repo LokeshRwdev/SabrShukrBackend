@@ -1,8 +1,9 @@
 const affiliateController = require('./affiliateController'); // Import affiliate controller
 const { createClient } = require('@supabase/supabase-js');
 
+
 exports.placeOrder = async (req, res, next) => {
-  const { shippingAddressId, paymentMethod } = req.body;
+  const { shippingAddressId, paymentMethod, discountAmount: clientDiscountAmount, applyGiftWrap, giftDetails } = req.body;
   const userId = req.user.id;
   const token = req.headers["authorization"]?.split(" ")[1];
   const supabaseWithAuth = createClient(
@@ -68,14 +69,36 @@ exports.placeOrder = async (req, res, next) => {
       throw addressError;
     }
 
-    // 4. Create an entry in the orders table
+    // 4. Compute discount and gift wrap fee, and final amount
+    let computedDiscount = 0;
+    if (typeof clientDiscountAmount === 'number') {
+      computedDiscount = clientDiscountAmount;
+    }
+    // Sanitize discount
+    if (!Number.isFinite(computedDiscount) || computedDiscount < 0) computedDiscount = 0;
+    if (computedDiscount > totalAmount) computedDiscount = totalAmount;
+    const GIFT_WRAP_FEE = 30;
+    const isGiftWrapped = Boolean(applyGiftWrap);
+    const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
+    const finalAmount = totalAmount - computedDiscount + giftWrapFee;
+    const giftRecipientName = giftDetails?.recipientName ?? null;
+    const giftMessage = giftDetails?.message ?? null;
+    const giftSenderName = giftDetails?.senderName ?? null;
+
+    // 5. Create an entry in the orders table
     const { data: newOrder, error: orderError } = await supabaseWithAuth
       .from('orders')
       .insert({
         user_id: userId,
         shipping_address: shippingAddress, // Store full address as JSONB
         total_amount: totalAmount,
-        final_amount: totalAmount, // Assuming no discount for now
+        discount_amount: computedDiscount,
+        gift_wrap_fee: giftWrapFee,
+        is_gift_wrapped: isGiftWrapped,
+        gift_recipient_name: giftRecipientName,
+        gift_message: giftMessage,
+        gift_sender_name: giftSenderName,
+        final_amount: finalAmount,
         status: 'pending',
         payment_status: paymentMethod === 'COD' ? 'completed' : 'pending', // Set to completed for COD
         payment_method: paymentMethod, // Store payment method
@@ -117,7 +140,7 @@ exports.placeOrder = async (req, res, next) => {
 
     if (deleteCartError) throw deleteCartError;
 
-    // Handle affiliate conversion if tracking code is present in session/cookies
+    // 8. Handle affiliate conversion if tracking code is present in session/cookies
     const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode; // Adjust based on your session/cookie mechanism
     if (affiliateTrackingCode) {
       // 1. Find affiliate ID by tracking code

@@ -1566,6 +1566,10 @@ paths:
                   type: string
                   format: uri
                   example: https://example.com/profile.jpg
+                dateOfBirth:
+                  type: string
+                  format: date
+                  example: 1990-05-21
       responses:
         '200':
           description: User profile updated successfully
@@ -1974,6 +1978,37 @@ paths:
                   enum: [COD, Online]
                   description: Method of payment for the order (Cash On Delivery or Online Payment).
                   example: COD
+                discountAmount:
+                  type: number
+                  format: float
+                  description: Optional discount amount computed on the client (will be sanitized and stored as orders.discount_amount)
+                  example: 150.00
+                applyGiftWrap:
+                  type: boolean
+                  description: If true, applies a fixed gift wrap fee of 30 and marks the order as gift wrapped.
+                  example: true
+                giftDetails:
+                  type: object
+                  description: Optional gifting details; if provided and applyGiftWrap is true, they will be stored with the order.
+                  properties:
+                    recipientName:
+                      type: string
+                      example: Jane Doe
+                    message:
+                      type: string
+                      example: Happy Birthday! Hope you have a wonderful day.
+                    senderName:
+                      type: string
+                      example: John
+            example:
+              shippingAddressId: 1
+              paymentMethod: COD
+              discountAmount: 150.0
+              applyGiftWrap: true
+              giftDetails:
+                recipientName: Jane Doe
+                message: Happy Birthday! Hope you have a wonderful day.
+                senderName: John
       responses:
         '201':
           description: Order placed successfully
@@ -3564,57 +3599,40 @@ paths:
                       $ref: '#/components/schemas/Coupons'
         '500':
           description: Internal Server Error
+  /upload:
     post:
       tags:
-        - Coupon APIs
-      summary: Create a new coupon (Admin Only)
+        - Media Upload
+      summary: Upload an image or video to S3
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               properties:
-                code:
+                file:
                   type: string
-                  maxLength: 50
-                  example: SUMMER20
-                description:
+                  format: binary
+                  description: Image or video file to upload
+                useCase:
                   type: string
-                  example: 20% off summer sale
-                discount_type:
+                  enum: [profile, review, product, banner]
+                  default: profile
+                bucket:
                   type: string
-                  enum: [percentage, fixed_amount]
-                discount_value:
-                  type: number
-                  format: float
-                  example: 20
-                min_purchase_amount:
-                  type: number
-                  format: float
-                  example: 500
-                max_uses:
-                  type: integer
-                  nullable: true
-                  example: 1000
-                max_uses_per_user:
-                  type: integer
-                  example: 1
-                starts_at:
+                  description: Override target bucket. If omitted, bucket is chosen based on useCase and env.
+                keyPrefix:
                   type: string
-                  format: date-time
-                expires_at:
+                  description: Optional key prefix. Default uploads/{useCase}
+                publicBase:
                   type: string
-                  format: date-time
-                  nullable: true
-                is_active:
-                  type: boolean
-                  example: true
+                  description: Override public base URL for the uploaded object
       responses:
         '201':
-          description: Coupon created successfully
+          description: File uploaded successfully
           content:
             application/json:
               schema:
@@ -3624,7 +3642,22 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    $ref: '#/components/schemas/Coupons'
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        example: https://dummy-bucket.s3.amazonaws.com/uploads/2025-08-01/uuid.jpg
+                      key:
+                        type: string
+                        example: uploads/2025-08-01/uuid.jpg
+                      bucket:
+                        type: string
+                        example: dummy-bucket-name
+                      contentType:
+                        type: string
+                        example: image/jpeg
+                      size:
+                        type: integer
         '400':
           description: Bad Request
         '401':

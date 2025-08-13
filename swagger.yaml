@@ -89,6 +89,17 @@ components:
           example:
             color: "Blue"
             size: "Small"
+        discount_type:
+          type: string
+          nullable: true
+          description: Type of discount applied to this variant (e.g., percentage or fixed amount).
+          example: "percentage"
+        discount_value:
+          type: number
+          format: float
+          nullable: true
+          description: Discount value. If percentage, treat as percent; otherwise treat as absolute amount.
+          example: 10
         created_at:
           type: string
           format: date-time
@@ -111,6 +122,8 @@ components:
         attributes:
           color: "Blue"
           size: "Small"
+        discount_type: "percentage"
+        discount_value: 10
         created_at: "2023-01-16T11:00:00Z"
         updated_at: "2023-01-16T11:00:00Z"
 
@@ -156,6 +169,18 @@ components:
         comment:
           type: string
           nullable: true
+        images:
+          type: array
+          description: Optional image URLs attached to the review
+          items:
+            type: string
+            format: uri
+        videos:
+          type: array
+          description: Optional video URLs attached to the review
+          items:
+            type: string
+            format: uri
         created_at:
           type: string
           format: date-time
@@ -166,6 +191,11 @@ components:
         user_id: "uuid-user-123"
         rating: 4.5
         comment: "Great product, highly recommend!"
+        images:
+          - "https://cdn.example.com/reviews/img1.jpg"
+          - "https://cdn.example.com/reviews/img2.jpg"
+        videos:
+          - "https://cdn.example.com/reviews/clip1.mp4"
         created_at: "2023-01-05T09:30:00Z"
 
     ProductWithVariants:
@@ -209,6 +239,8 @@ components:
                 attributes:
                   color: "Red"
                   size: "S"
+                discount_type: "percentage"
+                discount_value: 10
               - id: 102
                 product_id: 1
                 price: 20.00
@@ -218,6 +250,8 @@ components:
                 attributes:
                   color: "Blue"
                   size: "M"
+                discount_type: "fixed_amount"
+                discount_value: 5
 
     CreateProductRequest:
       type: object
@@ -297,6 +331,16 @@ components:
           type: array
           items:
             type: integer
+        variants:
+          type: array
+          description: Upsert variants. Include `id` to update existing; omit `id` to create new.
+          items:
+            $ref: '#/components/schemas/UpdateProductVariantInput'
+        deletedVariantIds:
+          type: array
+          description: Variant IDs to delete from this product.
+          items:
+            type: integer
       example:
         name: "Updated Yoga Mat"
         description: "An even more durable and eco-friendly yoga mat."
@@ -332,6 +376,17 @@ components:
           example:
             color: "Green"
             size: "Large"
+        discount_type:
+          type: string
+          nullable: true
+          description: Type of discount applied to this variant (e.g., percentage or flat).
+          example: "percentage"
+        discount_value:
+          type: number
+          format: float
+          nullable: true
+          description: Discount value. If percentage, treat as percent; otherwise treat as absolute amount.
+          example: 10
       required:
         - price
         - stock_quantity
@@ -369,6 +424,17 @@ components:
           example:
             color: "Blue"
             material: "Cotton"
+        discount_type:
+          type: string
+          nullable: true
+          description: Type of discount applied to this variant (e.g., percentage or flat).
+          example: "percentage"
+        discount_value:
+          type: number
+          format: float
+          nullable: true
+          description: Discount value. If percentage, treat as percent; otherwise treat as absolute amount.
+          example: 10
 
     UpdateProductVariantRequest:
       type: object
@@ -400,6 +466,48 @@ components:
           example:
             color: "Blue"
             material: "Organic Cotton"
+        discount_type:
+          type: string
+          nullable: true
+          description: Type of discount applied to this variant (e.g., percentage or flat).
+          example: "percentage"
+        discount_value:
+          type: number
+          format: float
+          nullable: true
+          description: Discount value. If percentage, treat as percent; otherwise treat as absolute amount.
+          example: 10
+
+    UpdateProductVariantInput:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Existing variant ID to update. Omit to create a new variant.
+        price:
+          type: number
+          format: float
+          example: 48
+        stock_quantity:
+          type: integer
+          example: 45
+        sku:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+        attributes:
+          type: object
+          nullable: true
+        discount_type:
+          type: string
+          nullable: true
+        discount_value:
+          type: number
+          format: float
+          nullable: true
 
     User:
       type: object
@@ -1124,6 +1232,8 @@ components:
             is_thumbnail: true
         product_variants:
           - price: 25.00
+            discount_type: "percentage"
+            discount_value: 15
 
     CreateAddressRequest:
       type: object
@@ -2105,6 +2215,32 @@ paths:
                 comment:
                   type: string
                   example: Excellent product, highly recommend!
+                images:
+                  type: array
+                  description: Optional image URLs to attach to the review (max 10)
+                  items:
+                    type: string
+                    format: uri
+                  example:
+                    - https://cdn.example.com/reviews/img1.jpg
+                    - https://cdn.example.com/reviews/img2.jpg
+                videos:
+                  type: array
+                  description: Optional video URLs to attach to the review (max 10)
+                  items:
+                    type: string
+                    format: uri
+                  example:
+                    - https://cdn.example.com/reviews/clip1.mp4
+            example:
+              productId: 123
+              rating: 5
+              comment: Excellent product, highly recommend!
+              images:
+                - https://cdn.example.com/reviews/img1.jpg
+                - https://cdn.example.com/reviews/img2.jpg
+              videos:
+                - https://cdn.example.com/reviews/clip1.mp4
       responses:
         '201':
           description: Review submitted successfully
@@ -3616,20 +3752,30 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: Image or video file to upload
+                  description: Image or video file to upload. Field name must be "file".
                 useCase:
                   type: string
-                  enum: [profile, review, product, banner]
+                  enum: [profile, review, product]
                   default: profile
+                  example: profile
                 bucket:
                   type: string
                   description: Override target bucket. If omitted, bucket is chosen based on useCase and env.
+                  example: myapp-profile-images-2024
                 keyPrefix:
                   type: string
                   description: Optional key prefix. Default uploads/{useCase}
+                  example: uploads/profile
                 publicBase:
                   type: string
                   description: Override public base URL for the uploaded object
+                  example: https://myapp-profile-images-2024.s3.us-east-1.amazonaws.com
+              example:
+                useCase: profile
+                bucket: myapp-profile-images-2024
+                keyPrefix: uploads/profile
+                publicBase: https://myapp-profile-images-2024.s3.us-east-1.amazonaws.com
+                file: (binary)
       responses:
         '201':
           description: File uploaded successfully
@@ -4060,5 +4206,218 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/RecommendedProduct'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/shipping/check-rates:
+    post:
+      tags: [Admin APIs, Shipping]
+      summary: Check serviceability and rates for a shipment via Shiprocket
+      description: Checks if delivery is available between the configured pickup postcode and the provided delivery pincode and returns available courier options with rates.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                  description: Internal order ID to derive shipping address and weight. If not provided, deliveryPincode must be sent.
+                  example: 123
+                deliveryPincode:
+                  type: string
+                  description: Destination pincode for serviceability. Required if orderId is not provided.
+                  example: '560001'
+                isCod:
+                  type: boolean
+                  description: Whether COD is requested.
+                  example: true
+                totalWeightKg:
+                  type: number
+                  format: float
+                  description: Total parcel weight in kilograms. If omitted and orderId is provided, it is computed from items; otherwise default from env is used.
+                  example: 1.2
+      responses:
+        '200':
+          description: Serviceability and rate results from Shiprocket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: Bad Request (missing required fields)
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/shipping/create-order:
+    post:
+      tags: [Admin APIs, Shipping]
+      summary: Create a Shiprocket order for an internal order
+      description: Creates an Adhoc order in Shiprocket for the given internal order and stores `shiprocket_order_id` and `shipment_id` on the order.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                  description: Internal order ID to export to Shiprocket.
+                  example: 123
+              required:
+                - orderId
+      responses:
+        '200':
+          description: Shiprocket order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      shiprocketOrderId:
+                        type: integer
+                        example: 9876543
+                      shipmentId:
+                        type: integer
+                        example: 54321987
+        '400':
+          description: Bad Request (missing orderId)
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/shipping/generate-awb:
+    post:
+      tags: [Admin APIs, Shipping]
+      summary: Generate AWB and schedule pickup
+      description: Generates AWB for the order's shipment and schedules pickup automatically. Requires an existing `shipment_id` on the order.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                  description: Internal order ID
+                  example: 123
+                courierId:
+                  type: integer
+                  description: Optional Shiprocket courier ID to force assign
+                  example: 2
+                pickupDate:
+                  type: string
+                  description: Optional pickup date in YYYY-MM-DD format; defaults to next day
+                  example: '2025-08-14'
+              required:
+                - orderId
+      responses:
+        '200':
+          description: AWB generated and pickup scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+        '400':
+          description: Bad Request (shipment_id missing or invalid input)
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/shipping/generate-label:
+    post:
+      tags: [Admin APIs, Shipping]
+      summary: Generate and fetch label URL for a shipment
+      description: Generates label for the order's shipment and stores the label URL on the order record.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orderId:
+                  type: integer
+                  description: Internal order ID
+                  example: 123
+              required:
+                - orderId
+      responses:
+        '200':
+          description: Label generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      label_url:
+                        type: string
+                        example: 'https://sr-cdn.example/labels/abc123.pdf'
+        '400':
+          description: Bad Request (shipment_id missing or invalid input)
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /webhooks/shiprocket-tracking:
+    post:
+      tags: [Webhooks, Shipping]
+      summary: Receives shipment tracking updates from Shiprocket
+      description: Shiprocket calls this endpoint to notify shipment status changes. No authentication is required, but the payload is validated internally.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              example:
+                shipment_id: 54321987
+                current_status: DELIVERED
+                awb: XYZ12345678
+                courier: Delhivery
+                eta: '2025-08-16'
+      responses:
+        '200':
+          description: Webhook received and processed
         '500':
           $ref: '#/components/responses/ServerError'

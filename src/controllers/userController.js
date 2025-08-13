@@ -1,17 +1,23 @@
-const supabase = require('../utils/supabaseClient');
+const supabase = require("../utils/supabaseClient");
+const { serviceRole: supabaseServiceRole } = require('../utils/supabaseClient');
 
 exports.getProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone_number, profile_picture_url, date_of_birth, role, is_blocked, created_at, updated_at')
-      .eq('id', userId)
+      .from("profiles")
+      .select(
+        "id, full_name, phone_number, profile_picture_url, date_of_birth, role, is_blocked, created_at, updated_at"
+      )
+      .eq("id", userId)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') { // No rows found
-        return res.status(404).json({ success: false, message: 'User profile not found.' });
+      if (error.code === "PGRST116") {
+        // No rows found
+        return res
+          .status(404)
+          .json({ success: false, message: "User profile not found." });
       }
       throw error;
     }
@@ -38,20 +44,26 @@ exports.updateProfile = async (req, res, next) => {
     const userId = req.user.id;
     const { fullName, profilePictureUrl, dateOfBirth } = req.body;
 
-    const { data: updatedProfile, error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: fullName,
-        profile_picture_url: profilePictureUrl,
-        date_of_birth: dateOfBirth,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', userId)
+    // Upsert ensures a profile row exists for this user
+    const upsertPayload = {
+      id: userId,
+      full_name: fullName,
+      profile_picture_url: profilePictureUrl,
+      date_of_birth: dateOfBirth,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Use service role client to bypass RLS for backend-controlled upsert
+    const { data: updatedProfile, error } = await supabaseServiceRole
+      .from("profiles")
+      .upsert(upsertPayload, { onConflict: "id" })
       .select();
 
     if (error) throw error;
     if (!updatedProfile || updatedProfile.length === 0) {
-      return res.status(404).json({ success: false, message: 'User profile not found.' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User profile not found." });
     }
 
     // Remap response to camelCase for consistency
@@ -73,4 +85,4 @@ exports.updateProfile = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}; 
+};

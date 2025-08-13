@@ -16,9 +16,11 @@ exports.getProducts = async (req, res, next) => {
         name,
         slug,
         description,
+        is_featured,
+        is_published,
         brand,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, stock_quantity, attributes)
+        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value)
       `
       )
       .eq("is_published", true);
@@ -137,9 +139,10 @@ exports.searchProducts = async (req, res, next) => {
         name,
         slug,
         description,
+        is_featured,
         brand,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, stock_quantity, attributes)
+        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value)
       `)
       .eq("is_published", true)
       .or(
@@ -199,7 +202,7 @@ exports.getProductRecommendations = async (req, res, next) => {
         name,
         slug,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, attributes)
+        product_variants(id, price, attributes, discount_type, discount_value)
       `)
       .eq('is_published', true)
       .in('id', recommendedIds) // Use the clean array of IDs

@@ -98,6 +98,14 @@ app.use("/api", dealRoutes);
 const uploadRoutes = require("./routes/uploadRoutes");
 app.use("/api/upload", uploadRoutes);
 
+// Admin Shipping routes (Shiprocket)
+const shippingRoutes = require("./routes/shippingRoutes");
+app.use("/api/admin/shipping", shippingRoutes);
+
+// Webhooks
+const webhookRoutes = require("./routes/webhookRoutes");
+app.use("/api/webhooks", webhookRoutes);
+
 // Error handling middleware (to be implemented)
 const errorHandler = require("./middlewares/errorHandler");
 app.use(errorHandler);

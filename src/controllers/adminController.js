@@ -95,6 +95,8 @@ exports.createProduct = async (req, res, next) => {
       sku: variant.sku,
       image_url: variant.image_url,
       attributes: variant.attributes,
+      discount_type: variant.discount_type || null,
+      discount_value: variant.discount_value ?? null,
     }));
 
     const { data: newVariants, error: variantsError } = await supabaseServiceRole
@@ -117,7 +119,7 @@ exports.createProduct = async (req, res, next) => {
 exports.updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, slug, description, brand, isPublished, isFeatured, imageUrls, categoryIds } = req.body;
+    const { name, slug, description, brand, isPublished, isFeatured, imageUrls, categoryIds, variants, deletedVariantIds } = req.body;
 
     const { data: updatedProduct, error: productError } = await supabaseServiceRole
       .from('products')
@@ -152,6 +154,60 @@ exports.updateProduct = async (req, res, next) => {
         const productCategoriesToInsert = categoryIds.map(categoryId => ({ product_id: id, category_id: categoryId }));
         const { error: productCategoriesError } = await supabaseServiceRole.from('product_categories').insert(productCategoriesToInsert);
         if (productCategoriesError) throw productCategoriesError;
+      }
+    }
+
+    // Optional: Delete specific variants if requested
+    if (Array.isArray(deletedVariantIds) && deletedVariantIds.length > 0) {
+      const { error: deleteVariantsError } = await supabaseServiceRole
+        .from('product_variants')
+        .delete()
+        .in('id', deletedVariantIds)
+        .eq('product_id', id);
+      if (deleteVariantsError) throw deleteVariantsError;
+    }
+
+    // Optional: Upsert variants if provided (update existing by id, insert new without id)
+    if (Array.isArray(variants)) {
+      const variantsToUpdate = variants.filter(v => v && v.id);
+      const variantsToInsert = variants.filter(v => v && !v.id);
+
+      // Updates
+      for (const variant of variantsToUpdate) {
+        const updatePayload = {
+          price: variant.price,
+          stock_quantity: variant.stock_quantity,
+          sku: variant.sku,
+          image_url: variant.image_url,
+          attributes: variant.attributes,
+          discount_type: variant.discount_type || null,
+          discount_value: variant.discount_value ?? null,
+          updated_at: new Date().toISOString(),
+        };
+        const { error: variantUpdateError } = await supabaseServiceRole
+          .from('product_variants')
+          .update(updatePayload)
+          .eq('id', variant.id)
+          .eq('product_id', id);
+        if (variantUpdateError) throw variantUpdateError;
+      }
+
+      // Inserts
+      if (variantsToInsert.length > 0) {
+        const insertRows = variantsToInsert.map(variant => ({
+          product_id: id,
+          price: variant.price,
+          stock_quantity: variant.stock_quantity,
+          sku: variant.sku,
+          image_url: variant.image_url,
+          attributes: variant.attributes,
+          discount_type: variant.discount_type || null,
+          discount_value: variant.discount_value ?? null,
+        }));
+        const { error: variantInsertError } = await supabaseServiceRole
+          .from('product_variants')
+          .insert(insertRows);
+        if (variantInsertError) throw variantInsertError;
       }
     }
 
@@ -549,7 +605,7 @@ exports.getAllUsers = async (req, res, next) => {
 exports.createProductVariant = async (req, res, next) => {
   try {
     const { productId } = req.params;
-    const { price, stock_quantity, sku, image_url, attributes } = req.body;
+    const { price, stock_quantity, sku, image_url, attributes, discount_type, discount_value } = req.body;
 
     const { data: newVariant, error } = await supabaseServiceRole
       .from('product_variants')
@@ -560,6 +616,8 @@ exports.createProductVariant = async (req, res, next) => {
         sku,
         image_url,
         attributes,
+        discount_type: discount_type || null,
+        discount_value: discount_value ?? null,
       })
       .select()
       .single();
@@ -574,7 +632,7 @@ exports.createProductVariant = async (req, res, next) => {
 exports.updateProductVariant = async (req, res, next) => {
   try {
     const { variantId } = req.params;
-    const { price, stock_quantity, sku, image_url, attributes } = req.body;
+    const { price, stock_quantity, sku, image_url, attributes, discount_type, discount_value } = req.body;
 
     const { data: updatedVariant, error } = await supabaseServiceRole
       .from('product_variants')
@@ -584,6 +642,8 @@ exports.updateProductVariant = async (req, res, next) => {
         sku,
         image_url,
         attributes,
+        discount_type: discount_type || null,
+        discount_value: discount_value ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', variantId)

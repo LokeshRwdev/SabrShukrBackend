@@ -3,7 +3,23 @@ const supabase = require('../utils/supabaseClient');
 exports.addReview = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { productId, rating, comment } = req.body;
+    const { productId, rating, comment, images, videos } = req.body;
+
+    // Normalize optional media arrays
+    const toArray = (value) =>
+      Array.isArray(value)
+        ? value
+        : (typeof value === 'string' && value.trim().length > 0)
+        ? [value]
+        : [];
+    const sanitizeUrls = (arr) =>
+      arr
+        .filter((u) => typeof u === 'string')
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0 && /^https?:\/\//i.test(u))
+        .slice(0, 10); // Limit to 10 of each to avoid abuse
+    const imageUrls = sanitizeUrls(toArray(images));
+    const videoUrls = sanitizeUrls(toArray(videos));
 
     // Step 1: First, get all order IDs for the current user.
     const { data: orders, error: ordersError } = await supabase
@@ -43,6 +59,9 @@ exports.addReview = async (req, res, next) => {
         product_id: productId,
         rating,
         comment,
+        // These columns must exist in the 'reviews' table (e.g., text[] or jsonb)
+        ...(imageUrls.length ? { images: imageUrls } : {}),
+        ...(videoUrls.length ? { videos: videoUrls } : {}),
       })
       .select()
       .single(); // Use .single() to get the object directly instead of an array

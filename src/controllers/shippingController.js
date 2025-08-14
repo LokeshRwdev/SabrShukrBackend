@@ -12,6 +12,17 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function sanitizePhoneNumber(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  // Shiprocket expects a 10-digit Indian mobile number; take last 10 digits if longer
+  return digits.slice(-10);
+}
+
+function sanitizePincode(value) {
+  const digits = String(value || "").replace(/[^\d]/g, "");
+  return digits;
+}
+
 async function getOrderWithItems(orderId) {
   const { data: order, error } = await supabaseServiceRole
     .from("orders")
@@ -76,10 +87,51 @@ exports.createShiprocketOrder = async (req, res, next) => {
 
     const { totalWeightKg } = computeParcelMetrics(order);
 
-    const address = order.shipping_address || {};
-    const customerName = address.name || order.profiles?.full_name || "Customer";
-    const customerEmail = address.email || process.env.SHIPROCKET_FALLBACK_EMAIL || "order@sabrshukr.store";
-    const customerPhone = address.phone_number || address.phone || order.profiles?.phone_number || process.env.SHIPROCKET_FALLBACK_PHONE || "9999999999";
+    // Allow overriding/missing shipping address via request body
+    const addressOverride = req.body.address || req.body.shipping_address || null;
+    const mergedAddress = {
+      ...(order.shipping_address || {}),
+      ...(addressOverride || {}),
+    };
+
+    const pincodeRaw = sanitizePincode(mergedAddress.pincode || mergedAddress.postal_code);
+    const customerName = mergedAddress.name || order.profiles?.full_name || "Customer";
+    const customerEmail = mergedAddress.email || process.env.SHIPROCKET_FALLBACK_EMAIL || "order@sabrshukr.store";
+    const customerPhone = sanitizePhoneNumber(
+      mergedAddress.phone_number || mergedAddress.phone || order.profiles?.phone_number || process.env.SHIPROCKET_FALLBACK_PHONE || "9999999999"
+    );
+
+    // Validate required address fields to avoid Shiprocket 400 errors
+    const requiredFieldsMissing = [];
+    if (!customerName) requiredFieldsMissing.push("name");
+    if (!customerEmail) requiredFieldsMissing.push("email");
+    if (!customerPhone || customerPhone.length !== 10) requiredFieldsMissing.push("phone");
+    if (!mergedAddress.address_line1 && !mergedAddress.address) requiredFieldsMissing.push("address_line1");
+    if (!mergedAddress.city && !mergedAddress.town) requiredFieldsMissing.push("city");
+    if (!mergedAddress.state) requiredFieldsMissing.push("state");
+    if (!pincodeRaw || pincodeRaw.length !== 6) requiredFieldsMissing.push("pincode");
+
+    if (requiredFieldsMissing.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing shipping address fields: ${requiredFieldsMissing.join(", ")}`,
+      });
+    }
+
+    // If admin provided an override, persist it on the order for future operations
+    if (addressOverride) {
+      const newShippingAddress = {
+        ...mergedAddress,
+        pincode: pincodeRaw,
+        postal_code: pincodeRaw,
+        phone_number: customerPhone,
+        phone: customerPhone,
+      };
+      await supabaseServiceRole
+        .from("orders")
+        .update({ shipping_address: newShippingAddress, updated_at: new Date().toISOString() })
+        .eq("id", orderId);
+    }
 
     const orderItems = (order.order_items || []).map((it) => ({
       name: it.product_name || it.products?.name || `Item ${it.product_id || it.variant_id}`,
@@ -91,21 +143,42 @@ exports.createShiprocketOrder = async (req, res, next) => {
       hsn: process.env.DEFAULT_HSN_CODE || undefined,
     }));
 
+    if (!orderItems || orderItems.length === 0) {
+      return res.status(400).json({ success: false, message: "Order has no items to ship" });
+    }
+
     const payload = {
       order_id: String(order.id),
       order_date: new Date(order.order_date || Date.now()).toISOString(),
-      pickup_location: process.env.SHIPROCKET_PICKUP_LOCATION || "Primary",
+      pickup_location: req.body.pickup_location || process.env.SHIPROCKET_PICKUP_LOCATION || "warehouse",
+      comment: req.body.comment || undefined,
+      reseller_name: process.env.RESELLER_NAME || undefined,
+      company_name: process.env.COMPANY_NAME || process.env.STORE_NAME || undefined,
       billing_customer_name: customerName,
       billing_last_name: "",
-      billing_address: `${address.address_line1 || address.address || ""}`.slice(0, 150),
-      billing_address_2: `${address.address_line2 || ""}`.slice(0, 150),
-      billing_city: address.city || address.town || "",
-      billing_pincode: String(address.pincode || address.postal_code || ""),
-      billing_state: address.state || "",
-      billing_country: address.country || "India",
+      billing_address: `${mergedAddress.address_line1 || mergedAddress.address || ""}`.slice(0, 150),
+      billing_address_2: `${mergedAddress.address_line2 || ""}`.slice(0, 150),
+      billing_isd_code: "91",
+      billing_city: mergedAddress.city || mergedAddress.town || "",
+      billing_pincode: pincodeRaw,
+      billing_state: mergedAddress.state || "",
+      billing_country: mergedAddress.country || "India",
       billing_email: customerEmail,
       billing_phone: String(customerPhone),
-      shipping_is_billing: true,
+      billing_alternate_phone: mergedAddress.alternate_phone ? sanitizePhoneNumber(mergedAddress.alternate_phone) : undefined,
+      // Provide shipping fields and also set shipping_is_billing to 1 (API commonly expects 0/1)
+      shipping_is_billing: 1,
+      shipping_customer_name: customerName,
+      shipping_last_name: "",
+      shipping_address: `${mergedAddress.address_line1 || mergedAddress.address || ""}`.slice(0, 150),
+      shipping_address_2: `${mergedAddress.address_line2 || ""}`.slice(0, 150),
+      shipping_city: mergedAddress.city || mergedAddress.town || "",
+      shipping_pincode: pincodeRaw,
+      shipping_state: mergedAddress.state || "",
+      shipping_country: mergedAddress.country || "India",
+      shipping_isd_code: "91",
+      shipping_email: customerEmail,
+      shipping_phone: String(customerPhone),
       order_items: orderItems,
       payment_method: order.payment_method === "COD" ? "COD" : "Prepaid",
       shipping_charges: 0,
@@ -117,10 +190,21 @@ exports.createShiprocketOrder = async (req, res, next) => {
       breadth: toNumber(process.env.DEFAULT_PARCEL_BREADTH_CM, 15),
       height: toNumber(process.env.DEFAULT_PARCEL_HEIGHT_CM, 10),
       weight: totalWeightKg,
+      order_type: req.body.order_type || process.env.SHIPROCKET_ORDER_TYPE || undefined,
+      customer_gstin: req.body.customer_gstin || undefined,
+      invoice_number: req.body.invoice_number || undefined,
+      ewaybill_no: req.body.ewaybill_no || undefined,
       // Note: Add GST details if needed: seller_tin, etc.
     };
 
-    const sr = await createOrder(payload);
+    let sr;
+    try {
+      sr = await createOrder(payload);
+    } catch (err) {
+      // Surface Shiprocket error details to help diagnose address validation
+      const debug = err?.response?.body || { message: err.message };
+      return res.status(400).json({ success: false, message: err.message, shiprocketError: debug, payloadSent: process.env.NODE_ENV === "production" ? undefined : payload });
+    }
 
     const shiprocketOrderId = sr.order_id || sr.orderid || sr.data?.order_id;
     const shipmentId = sr.shipment_id || sr.data?.shipment_id || (Array.isArray(sr.shipment_id) ? sr.shipment_id[0] : undefined);

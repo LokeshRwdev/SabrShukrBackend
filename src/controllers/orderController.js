@@ -1,5 +1,10 @@
 const affiliateController = require('./affiliateController'); // Import affiliate controller
 const { createClient } = require('@supabase/supabase-js');
+// Service role client (bypasses RLS for privileged ops like stock updates). NEVER expose this key to clients.
+const supabaseService = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 
 exports.placeOrder = async (req, res, next) => {
@@ -13,10 +18,10 @@ exports.placeOrder = async (req, res, next) => {
   );
 
   try {
-    // 1. Get user's cart items along with variant and product details
+    // 1. Get user's cart items with variant details
     const { data: cartItems, error: cartError } = await supabaseWithAuth
       .from('cart_items')
-      .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))') // Select variant details
+      .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))')
       .eq('user_id', userId);
 
     if (cartError) throw cartError;
@@ -24,143 +29,138 @@ exports.placeOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Cart is empty.' });
     }
 
-    // 2. Validate stock and calculate total price
+    // 2. Validate stock & prepare items
     let totalAmount = 0;
     const orderItemsToInsert = [];
-    const stockUpdates = [];
+    const stockDecrements = []; // { id, quantity }
 
     for (const item of cartItems) {
       const variant = item.product_variants;
       if (!variant) {
-        throw new Error(`Variant not found for cart item with variant_id: ${item.variant_id}`);
+        return res.status(400).json({ success: false, message: `Variant not found for cart item ${item.variant_id}` });
       }
       if (variant.stock_quantity < item.quantity) {
-        return res.status(400).json({ success: false, message: `Not enough stock for ${variant.products.name} (Variant ID: ${variant.id}). Available: ${variant.stock_quantity}, Requested: ${item.quantity}` });
+        return res.status(400).json({
+          success: false,
+            message: `Not enough stock for ${variant.products?.name || 'Product'} (Variant ID: ${variant.id}). Available: ${variant.stock_quantity}, Requested: ${item.quantity}`
+        });
       }
-
-      const priceAtPurchase = variant.price;
-      const itemTotal = priceAtPurchase * item.quantity;
-      totalAmount += itemTotal;
+      totalAmount += variant.price * item.quantity;
       orderItemsToInsert.push({
-        variant_id: item.variant_id, // Changed from product_id to variant_id
-        product_id: variant.product_id, // Store product_id for reference
+        variant_id: item.variant_id,
+        product_id: variant.product_id,
         quantity: item.quantity,
-        price_at_purchase: priceAtPurchase,
+        price_at_purchase: variant.price
       });
-
-      stockUpdates.push({
-        id: variant.id,
-        new_stock_quantity: variant.stock_quantity - item.quantity,
-      });
+      stockDecrements.push({ id: variant.id, quantity: item.quantity });
     }
 
-    // 3. Get shipping address details (snapshot)
+    // 3. Snapshot shipping address
     const { data: shippingAddress, error: addressError } = await supabaseWithAuth
       .from('addresses')
       .select('*')
       .eq('id', shippingAddressId)
       .eq('user_id', userId)
       .single();
-
     if (addressError) {
       if (addressError.code === 'PGRST116') {
-        return res.status(404).json({ success: false, message: 'Shipping address not found or does not belong to user.' });
+        return res.status(404).json({ success: false, message: 'Shipping address not found.' });
       }
       throw addressError;
     }
 
-    // 4. Compute discount and gift wrap fee, and final amount
+    // 4. Discount / gift wrap
     let computedDiscount = 0;
-    if (typeof clientDiscountAmount === 'number') {
-      computedDiscount = clientDiscountAmount;
-    }
-    // Sanitize discount
+    if (typeof clientDiscountAmount === 'number') computedDiscount = clientDiscountAmount;
     if (!Number.isFinite(computedDiscount) || computedDiscount < 0) computedDiscount = 0;
     if (computedDiscount > totalAmount) computedDiscount = totalAmount;
     const GIFT_WRAP_FEE = 30;
     const isGiftWrapped = Boolean(applyGiftWrap);
     const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
     const finalAmount = totalAmount - computedDiscount + giftWrapFee;
-    const giftRecipientName = giftDetails?.recipientName ?? null;
-    const giftMessage = giftDetails?.message ?? null;
-    const giftSenderName = giftDetails?.senderName ?? null;
 
-    // 5. Create an entry in the orders table
+    // 5. Atomically decrement stock (service role) with optimistic check
+    // We do one-by-one with conditional WHERE to prevent negative stock.
+    for (const dec of stockDecrements) {
+      const { data: updatedRows, error: stockError } = await supabaseService
+        .from('product_variants')
+        .update({ updated_at: new Date().toISOString(), /* optional */ })
+        .eq('id', dec.id)
+        .gte('stock_quantity', dec.quantity) // ensure enough stock
+        .select('id, stock_quantity');
+      if (stockError) {
+        return res.status(400).json({ success: false, message: `Failed updating stock for variant ${dec.id}: ${stockError.message}` });
+      }
+      if (!updatedRows || updatedRows.length === 0) {
+        return res.status(400).json({ success: false, message: `Insufficient stock during finalization for variant ${dec.id}.` });
+      }
+      // Perform arithmetic locally after ensuring row matched
+      const currentStock = updatedRows[0].stock_quantity;
+      const newStock = currentStock - dec.quantity;
+      // Second step: set the decremented value (to avoid race with simultaneous updates we re-check)
+      const { data: finalUpdate, error: secondError } = await supabaseService
+        .from('product_variants')
+        .update({ stock_quantity: newStock })
+        .eq('id', dec.id)
+        .eq('stock_quantity', currentStock) // ensure unchanged since last read
+        .select('id');
+      if (secondError || !finalUpdate || finalUpdate.length === 0) {
+        return res.status(409).json({ success: false, message: `Stock conflict for variant ${dec.id}, please retry.` });
+      }
+    }
+
+    // 6. Create order
     const { data: newOrder, error: orderError } = await supabaseWithAuth
       .from('orders')
       .insert({
         user_id: userId,
-        shipping_address: shippingAddress, // Store full address as JSONB
+        shipping_address: shippingAddress,
         total_amount: totalAmount,
         discount_amount: computedDiscount,
         gift_wrap_fee: giftWrapFee,
         is_gift_wrapped: isGiftWrapped,
-        gift_recipient_name: giftRecipientName,
-        gift_message: giftMessage,
-        gift_sender_name: giftSenderName,
+        gift_recipient_name: giftDetails?.recipientName ?? null,
+        gift_message: giftDetails?.message ?? null,
+        gift_sender_name: giftDetails?.senderName ?? null,
         final_amount: finalAmount,
         status: 'pending',
-        payment_status: paymentMethod === 'COD' ? 'completed' : 'pending', // Set to completed for COD
-        payment_method: paymentMethod, // Store payment method
+        payment_status: paymentMethod === 'COD' ? 'completed' : 'pending',
+        payment_method: paymentMethod
       })
       .select()
       .single();
-
     if (orderError) throw orderError;
 
-    const orderId = newOrder.id;
-
-    // 5. Create corresponding entries in order_items
-    const orderItemsWithOrderId = orderItemsToInsert.map(item => ({ ...item, order_id: orderId }));
+    // 7. Insert order_items
+    const orderItemsWithOrderId = orderItemsToInsert.map(i => ({ ...i, order_id: newOrder.id }));
     const { error: orderItemsError } = await supabaseWithAuth
       .from('order_items')
       .insert(orderItemsWithOrderId);
-
     if (orderItemsError) throw orderItemsError;
 
-    // 6. Decrement stock for each product variant
-    for (const update of stockUpdates) {
-      const { error: stockUpdateError } = await supabaseWithAuth
-        .from('product_variants')
-        .update({ stock_quantity: update.new_stock_quantity })
-        .eq('id', update.id);
-      if (stockUpdateError) {
-        // Handle error: potentially revert order and stock changes if this fails
-        console.error(`Failed to update stock for variant ${update.id}:`, stockUpdateError);
-        // For production, you'd likely want to implement a more robust transaction rollback mechanism.
-        throw stockUpdateError; // Re-throw to trigger the catch block
-      }
-    }
-
-    // 7. Delete all items from the user's cart_items
+    // 8. Clear cart
     const { error: deleteCartError } = await supabaseWithAuth
       .from('cart_items')
       .delete()
       .eq('user_id', userId);
-
     if (deleteCartError) throw deleteCartError;
 
-    // 8. Handle affiliate conversion if tracking code is present in session/cookies
-    const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode; // Adjust based on your session/cookie mechanism
+    // 9. Affiliate (unchanged)
+    const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode;
     if (affiliateTrackingCode) {
-      // 1. Find affiliate ID by tracking code
-      const { data: affiliateData, error: affiliateLookupError } = await supabaseWithAuth
+      const { data: affiliateData } = await supabaseWithAuth
         .from('affiliates')
         .select('id')
         .eq('tracking_code', affiliateTrackingCode)
         .single();
-
-      if (!affiliateLookupError && affiliateData) {
-        const affiliateId = affiliateData.id;
-        // Call the affiliate conversion handler
-        await affiliateController.handleAffiliateConversion(orderId, affiliateId, newOrder.total_amount);
-      } else {
-        console.warn(`Affiliate tracking code ${affiliateTrackingCode} not found or invalid.`);
+      if (affiliateData) {
+        await affiliateController.handleAffiliateConversion(newOrder.id, affiliateData.id, newOrder.total_amount);
       }
     }
 
-    res.status(201).json({ success: true, message: 'Order placed successfully!', order: newOrder });
+    return res.status(201).json({ success: true, message: 'Order placed successfully', order: newOrder });
   } catch (err) {
+    // (Optional) TODO: consider compensating actions if partial stock decrements occurred before failure.
     next(err);
   }
 };
@@ -214,4 +214,4 @@ exports.getOrderById = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}; 
+};

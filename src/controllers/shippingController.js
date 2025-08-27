@@ -2,6 +2,7 @@ const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 const {
   checkServiceability,
   createOrder,
+  createReturnOrder,
   generateAwb,
   schedulePickup,
   generateLabel,
@@ -270,6 +271,73 @@ exports.generateLabel = async (req, res, next) => {
 
     return res.json({ success: true, data: { label_url: labelUrl, raw: labelResp } });
   } catch (err) {
+    next(err);
+  }
+};
+
+// Initiate Shiprocket return order
+// POST /api/admin/shipping/create-return-order
+exports.createShiprocketReturnOrder = async (req, res, next) => {
+  try {
+    const payload = req.body || {};
+    // Ensure original internal order ID is provided to validate return window
+    const originalOrderId = payload.originalOrderId || payload.orderId;
+    if (!originalOrderId) {
+      return res.status(400).json({ success: false, message: "originalOrderId (or orderId) is required to validate return eligibility" });
+    }
+
+    // Validate 7-day return policy window based on our internal order date
+    const { data: originalOrder, error: fetchErr } = await supabaseServiceRole
+      .from("orders")
+      .select("id, user_id, order_date, updated_at")
+      .eq("id", originalOrderId)
+      .maybeSingle();
+    if (fetchErr) throw fetchErr;
+    if (!originalOrder) {
+      return res.status(404).json({ success: false, message: "Original order not found" });
+    }
+
+    // Enforce ownership for non-admin users
+    const isAdmin = req.user && req.user.role === 'admin';
+    if (!isAdmin) {
+      if (!req.user || originalOrder.user_id !== req.user.id) {
+        return res.status(403).json({ success: false, message: "Forbidden: You can only initiate returns for your own orders." });
+      }
+    }
+
+    const orderDateIso = originalOrder.order_date || originalOrder.updated_at;
+    if (!orderDateIso) {
+      return res.status(400).json({ success: false, message: "Original order has no date set; cannot validate return window" });
+    }
+
+    const orderDateMs = new Date(orderDateIso).getTime();
+    const nowMs = Date.now();
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (nowMs - orderDateMs > sevenDaysMs) {
+      return res.status(400).json({ success: false, message: "Return window expired. Returns are allowed within 7 days of order date." });
+    }
+    // Minimal validation for required keys
+    const required = [
+      'order_id','order_date','pickup_customer_name','pickup_address','pickup_city','pickup_state','pickup_country','pickup_pincode','pickup_email','pickup_phone',
+      'shipping_customer_name','shipping_address','shipping_city','shipping_country','shipping_pincode','shipping_state','shipping_email','shipping_phone',
+      'order_items','payment_method','sub_total','length','breadth','height','weight'
+    ];
+    const missing = required.filter(k => payload[k] === undefined || payload[k] === null || payload[k] === '');
+    if (missing.length > 0) {
+      return res.status(400).json({ success: false, message: `Missing required fields: ${missing.join(', ')}` });
+    }
+
+    // Remove internal-only fields before sending to Shiprocket
+    const shiprocketPayload = { ...payload };
+    delete shiprocketPayload.originalOrderId;
+    delete shiprocketPayload.orderId; // internal reference; Shiprocket expects order_id
+
+    const sr = await createReturnOrder(shiprocketPayload);
+    return res.json({ success: true, data: sr });
+  } catch (err) {
+    if (err?.response) {
+      return res.status(400).json({ success: false, message: err.message, shiprocketError: err.response.body });
+    }
     next(err);
   }
 };

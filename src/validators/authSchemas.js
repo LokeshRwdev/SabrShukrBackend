@@ -18,8 +18,14 @@ exports.socialLoginSchema = Joi.object({
 exports.otpLoginSchema = Joi.object({
   phone: Joi.string().required(),
   otp: Joi.string().required(),
+  fullName: Joi.string().min(2).max(100).optional(),
+  email: Joi.string().email().optional(),
 });
 
 exports.sendOtpSchema = Joi.object({
   phone: Joi.string().required(),
 }); 
+
+exports.refreshTokenSchema = Joi.object({
+  refreshToken: Joi.string().required(),
+});

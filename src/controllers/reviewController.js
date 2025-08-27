@@ -1,8 +1,15 @@
 const supabase = require('../utils/supabaseClient');
+const { createClient } = require('@supabase/supabase-js');
 
 exports.addReview = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+      const userId = req.user.id;
+      const token = req.headers["authorization"]?.split(" ")[1];
+      const supabaseWithAuth = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY,
+        { global: { headers: { Authorization: `Bearer ${token}` } } }
+      );
     const { productId, rating, comment, images, videos } = req.body;
 
     // Normalize optional media arrays
@@ -22,7 +29,7 @@ exports.addReview = async (req, res, next) => {
     const videoUrls = sanitizeUrls(toArray(videos));
 
     // Step 1: First, get all order IDs for the current user.
-    const { data: orders, error: ordersError } = await supabase
+    const { data: orders, error: ordersError } = await supabaseWithAuth
       .from('orders')
       .select('id')
       .eq('user_id', userId);
@@ -38,33 +45,33 @@ exports.addReview = async (req, res, next) => {
     const orderIds = orders.map(order => order.id);
 
     // Step 2: Now, check if any of those orders contain the specific product.
-    const { data: orderItems, error: orderItemsError } = await supabase
+    // Use the `count` returned by Supabase when using { count: 'exact' }.
+     const { count, error: purchaseError } = await supabaseWithAuth
       .from('order_items')
-      .select('id', { count: 'exact' }) // More efficient to just get the count
-      .in('order_id', orderIds) // Use the array of IDs here
-      .eq('product_id', productId);
+      .select('*, orders!inner(*)', { count: 'exact', head: true })
+      .eq('product_id', productId)
+      .eq('orders.user_id', userId);
 
-    if (orderItemsError) throw orderItemsError;
+    if (purchaseError) throw purchaseError;
 
     // If the count is 0, the user has not purchased this item.
-    if (!orderItems || orderItems.length === 0) {
+    if (count === 0) {
       return res.status(403).json({ success: false, message: 'You can only review products you have purchased.' });
     }
 
-    // Insert the review (This part of your logic was already correct)
-    const { data: newReview, error: reviewError } = await supabase
+    // Insert the review
+    const { data: newReview, error: reviewError } = await supabaseWithAuth
       .from('reviews')
       .insert({
         user_id: userId,
         product_id: productId,
         rating,
         comment,
-        // These columns must exist in the 'reviews' table (e.g., text[] or jsonb)
         ...(imageUrls.length ? { images: imageUrls } : {}),
         ...(videoUrls.length ? { videos: videoUrls } : {}),
       })
       .select()
-      .single(); // Use .single() to get the object directly instead of an array
+      .single();
 
     if (reviewError) {
       if (reviewError.code === '23505') { // Unique violation

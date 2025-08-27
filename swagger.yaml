@@ -1097,6 +1097,15 @@ components:
           type: string
           description: The OTP code sent to the user's phone
           example: "123456"
+        fullName:
+          type: string
+          description: Optional full name to store in profiles table
+          example: "John Doe"
+        email:
+          type: string
+          format: email
+          description: Optional email to update in auth.users
+          example: "user@example.com"
 
     sendOtpRequest:
       type: object
@@ -1412,6 +1421,31 @@ paths:
           description: Successfully logged out
         '401':
           description: Unauthorized
+  /auth/verify-token:
+    get:
+      tags:
+        - Auth
+      summary: Verifies if the provided Bearer token is valid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Supabase auth user payload
+        '401':
+          description: Invalid or expired token / No token provided
+        '500':
+          description: Internal Server Error
   /auth/social-login:
     post:
       tags:
@@ -1433,6 +1467,57 @@ paths:
           description: Social login initiated. Returns a redirect URL.
         '400':
           description: Invalid provider
+  /auth/refresh-token:
+    post:
+      tags:
+        - Auth
+      summary: Refreshes an access token using a valid refresh token
+      parameters:
+        - in: header
+          name: X-Refresh-Token
+          required: false
+          schema:
+            type: string
+          description: Optional. Provide refresh token via header instead of body. If provided, body is not required.
+        - in: header
+          name: Authorization
+          required: false
+          schema:
+            type: string
+            example: Bearer <refreshToken>
+          description: Optional. You can also pass the refresh token as a Bearer token in the Authorization header for this endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refreshToken
+              properties:
+                refreshToken:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        '200':
+          description: Successfully refreshed session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: The new session and tokens payload from Supabase
+        '400':
+          description: Missing refreshToken
+        '401':
+          description: Invalid or expired refresh token
+        '500':
+          description: Internal Server Error
   /homepage:
     get:
       tags:
@@ -1482,23 +1567,21 @@ paths:
             type: string
           description: Filter products by category ID
         - in: query
-          name: brand
-          schema:
-            type: string
-          description: Filter products by brand
-        - in: query
           name: sortBy
           schema:
             type: string
-            enum: [price, name, created_at]
-          description: Field to sort by
+            enum:
+              - price
+              - created_at
+              - bestselling
+              - rating_desc
+          description: Sorting field. Omit both sortBy and order for Featured sorting.
         - in: query
           name: order
           schema:
             type: string
             enum: [asc, desc]
-            default: asc
-          description: Sort order
+          description: Sort direction (required when sortBy=price or sortBy=created_at)
         - in: query
           name: page
           schema:
@@ -1652,8 +1735,37 @@ paths:
                     type: object # User profile schema
         '401':
           description: Unauthorized
-        '404':
-          description: User profile not found
+  /auth/check-phone-exists:
+    post:
+      tags:
+        - Auth
+      summary: Checks if a phone number is already registered in Supabase auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+              properties:
+                phone:
+                  type: string
+                  example: "+919876543210"
+      responses:
+        '200':
+          description: Phone existence check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  exists:
+                    type: boolean
+        '400':
+          description: Missing or invalid input
         '500':
           description: Internal Server Error
     put:
@@ -1934,7 +2046,7 @@ paths:
     post:
       tags:
         - Cart
-      summary: Adds multiple product variants to the user\'s cart or updates quantities
+      summary: Adds a single product variant to the user\'s cart or updates quantity
       security:
         - bearerAuth: []
       requestBody:
@@ -1944,34 +2056,21 @@ paths:
             schema:
               type: object
               required:
-                - items
+                - variantId
+                - quantity
               properties:
-                items:
-                  type: array
-                  description: An array of product variants to add or update in the cart.
-                  items:
-                    type: object
-                    required:
-                      - variantId
-                      - quantity
-                    properties:
-                      variantId:
-                        type: integer
-                        description: The ID of the product variant.
-                        example: 101
-                      quantity:
-                        type: integer
-                        minimum: 1
-                        description: The quantity of the product variant.
-                        example: 1
-                  example:
-                    - variantId: 101
-                      quantity: 2
-                    - variantId: 102
-                      quantity: 1
+                variantId:
+                  type: integer
+                  description: The ID of the product variant.
+                  example: 101
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: The quantity of the product variant.
+                  example: 1
       responses:
         '200':
-          description: Successfully processed all cart item additions/updates
+          description: Successfully added or updated the cart item
           content:
             application/json:
               schema:
@@ -1980,28 +2079,11 @@ paths:
                   success:
                     type: boolean
                     example: true
-                  results:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        variantId:
-                          type: integer
-                          description: The ID of the product variant that was processed.
-                          example: 101
-                        success:
-                          type: boolean
-                          description: Indicates if the operation for this specific variant was successful.
-                          example: true
-                        message:
-                          type: string
-                          description: A message detailing the outcome of the operation (e.g., error message).
-                          example: "Item successfully added/updated in cart"
-                        data:
-                          type: object
-                          description: The updated cart item data if successful.
+                  data:
+                    type: object
+                    description: The updated cart item data if successful.
         '400':
-          description: Invalid input or insufficient stock for one or more items
+          description: Invalid input or insufficient stock
         '401':
           description: Unauthorized
         '500':
@@ -3287,6 +3369,11 @@ paths:
             type: string
             enum: [pending, processing, shipped, delivered, cancelled]
           description: Filter orders by status
+        - in: query
+          name: orderId
+          schema:
+            type: integer
+          description: Filter orders by exact order ID
       responses:
         '200':
           description: Successfully retrieved all orders
@@ -3304,9 +3391,11 @@ paths:
                   pagination:
                     type: object
                     properties:
-                      totalItems:
+                      page:
                         type: integer
-                      currentPage:
+                      limit:
+                        type: integer
+                      total:
                         type: integer
                       totalPages:
                         type: integer
@@ -3882,6 +3971,51 @@ paths:
           description: Forbidden (Admin role required).
         '500':
           description: Internal Server Error.
+  /notifications/send-order-email:
+    post:
+      tags:
+        - Notifications
+      summary: Send an order confirmation email to the customer (Admin Only)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerEmail
+                - orderId
+              properties:
+                customerEmail:
+                  type: string
+                  format: email
+                orderId:
+                  type: integer
+      responses:
+        '200':
+          description: Email queued/sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      messageId:
+                        type: string
+        '400':
+          description: Missing or invalid inputs
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Admin role required)
+        '500':
+          description: Error sending email
   /referrals/{userId}:
     get:
       tags:
@@ -4300,6 +4434,81 @@ paths:
                         example: 54321987
         '400':
           description: Bad Request (missing orderId)
+        '401':
+          description: Unauthorized
+        '403':
+          description: 'Forbidden: Admin access required'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /admin/shipping/create-return-order:
+    post:
+      tags: [Admin APIs, Shipping]
+      summary: Create a Shiprocket return order
+      description: Creates a return order in Shiprocket at `orders/create/return`. Requires the original internal order to be within a 7-day return window.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                originalOrderId:
+                  type: integer
+                  description: The internal order ID used to validate the 7-day return window.
+                order_id: { type: string }
+                order_date: { type: string }
+                channel_id: { type: string }
+                pickup_customer_name: { type: string }
+                pickup_last_name: { type: string }
+                company_name: { type: string }
+                pickup_address: { type: string }
+                pickup_address_2: { type: string }
+                pickup_city: { type: string }
+                pickup_state: { type: string }
+                pickup_country: { type: string }
+                pickup_pincode: { type: integer }
+                pickup_email: { type: string, format: email }
+                pickup_phone: { type: string }
+                pickup_isd_code: { type: string }
+                shipping_customer_name: { type: string }
+                shipping_last_name: { type: string }
+                shipping_address: { type: string }
+                shipping_address_2: { type: string }
+                shipping_city: { type: string }
+                shipping_country: { type: string }
+                shipping_pincode: { type: integer }
+                shipping_state: { type: string }
+                shipping_email: { type: string, format: email }
+                shipping_isd_code: { type: string }
+                shipping_phone: { type: string }
+                order_items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      sku: { type: string }
+                      name: { type: string }
+                      units: { type: integer }
+                      selling_price: { type: number }
+                      discount: { type: number }
+                      qc_enable: { type: boolean }
+                      hsn: { type: string }
+                      brand: { type: string }
+                      qc_size: { type: string }
+                payment_method: { type: string, enum: [PREPAID, COD] }
+                total_discount: { type: number }
+                sub_total: { type: number }
+                length: { type: number }
+                breadth: { type: number }
+                height: { type: number }
+                weight: { type: number }
+      responses:
+        '200':
+          description: Return order created successfully
+        '400':
+          description: Invalid request or return window expired
         '401':
           description: Unauthorized
         '403':

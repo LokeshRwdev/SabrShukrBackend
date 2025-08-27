@@ -86,6 +86,13 @@ async function createOrder(payload) {
   });
 }
 
+async function createReturnOrder(payload) {
+  return shiprocketRequest("orders/create/return", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 async function generateAwb({ shipmentId, courierId }) {
   const body = courierId ? { shipment_id: shipmentId, courier_id: courierId } : { shipment_id: shipmentId };
   return shiprocketRequest("courier/assign/awb", {
@@ -113,6 +120,7 @@ module.exports = {
   shiprocketRequest,
   checkServiceability,
   createOrder,
+  createReturnOrder,
   generateAwb,
   schedulePickup,
   generateLabel,

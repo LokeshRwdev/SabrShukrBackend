@@ -97,6 +97,9 @@ exports.createProduct = async (req, res, next) => {
       attributes: variant.attributes,
       discount_type: variant.discount_type || null,
       discount_value: variant.discount_value ?? null,
+      // New fields
+      dimensions_cm: variant.dimensions_cm ?? variant.dimensions ?? null,
+      weight_kg: variant.weight_kg ?? variant.weight ?? null,
     }));
 
     const { data: newVariants, error: variantsError } = await supabaseServiceRole
@@ -182,6 +185,9 @@ exports.updateProduct = async (req, res, next) => {
           attributes: variant.attributes,
           discount_type: variant.discount_type || null,
           discount_value: variant.discount_value ?? null,
+          // New fields
+          dimensions_cm: variant.dimensions_cm ?? variant.dimensions ?? null,
+          weight_kg: variant.weight_kg ?? variant.weight ?? null,
           updated_at: new Date().toISOString(),
         };
         const { error: variantUpdateError } = await supabaseServiceRole
@@ -203,6 +209,9 @@ exports.updateProduct = async (req, res, next) => {
           attributes: variant.attributes,
           discount_type: variant.discount_type || null,
           discount_value: variant.discount_value ?? null,
+          // New fields
+          dimensions_cm: variant.dimensions_cm ?? variant.dimensions ?? null,
+          weight_kg: variant.weight_kg ?? variant.weight ?? null,
         }));
         const { error: variantInsertError } = await supabaseServiceRole
           .from('product_variants')
@@ -516,12 +525,49 @@ exports.unblockUser = async (req, res, next) => {
 
 exports.getOrders = async (req, res, next) => {
   try {
-    const { data: orders, error } = await supabaseServiceRole
+    const pageParam = parseInt(req.query.page, 10);
+    const limitParam = parseInt(req.query.limit, 10);
+    const page = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+    const limit = Number.isNaN(limitParam) || limitParam < 1 ? 10 : limitParam;
+    const status = typeof req.query.status === 'string' ? req.query.status.trim() : undefined;
+    const orderIdRaw = req.query.orderId || req.query.orderID || req.query.id;
+    const orderId = orderIdRaw !== undefined && orderIdRaw !== null && String(orderIdRaw).trim() !== ''
+      ? parseInt(String(orderIdRaw), 10)
+      : undefined;
+
+    if (orderIdRaw !== undefined && (Number.isNaN(orderId) || orderId < 1)) {
+      return res.status(400).json({ success: false, message: 'Invalid orderId' });
+    }
+
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabaseServiceRole
       .from('orders')
-      .select('*, profiles(full_name), order_items(*, products(name))')
+      .select('*, profiles(full_name), order_items(*, products(name))', { count: 'exact' })
       .order('order_date', { ascending: false });
+
+    if (status && status.toLowerCase() !== 'all') {
+      query = query.eq('status', status);
+    }
+
+    if (orderId !== undefined) {
+      query = query.eq('id', orderId);
+    }
+
+    const { data: orders, error, count } = await query.range(from, to);
     if (error) throw error;
-    res.json({ success: true, data: orders });
+
+    res.json({
+      success: true,
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: count ? Math.ceil(count / limit) : 0,
+      },
+    });
   } catch (err) {
     next(err);
   }

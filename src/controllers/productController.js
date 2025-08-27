@@ -2,8 +2,7 @@ const supabase = require("../utils/supabaseClient");
 
 exports.getProducts = async (req, res, next) => {
   try {
-    const { category, brand, sortBy, order, page, limit, minPrice, maxPrice } =
-      req.query;
+    const { category, sortBy, order, page, limit, minPrice, maxPrice } = req.query;
 
     // 1. Base Query Construction
     // The main change is here. We select all variants associated with the product.
@@ -19,17 +18,14 @@ exports.getProducts = async (req, res, next) => {
         is_featured,
         is_published,
         brand,
+        created_at,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value)
+        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
       `
       )
       .eq("is_published", true);
 
     // 2. Filtering Logic
-    // Filter by brand (this remains on the 'products' table)
-    if (brand) {
-      query = query.eq("brand", brand);
-    }
 
     // Filter by price range (this now targets the 'product_variants' table)
     // This will return products that have AT LEAST ONE variant within the specified price range.
@@ -62,32 +58,117 @@ exports.getProducts = async (req, res, next) => {
       query = query.in("id", ids);
     }
 
-    // 3. Sorting Logic
-    // IMPORTANT: Sorting by 'price' is now complex because a product can have multiple prices.
-    // A simple sort by variant price isn't feasible here without a more complex database view or function.
-    // We will only allow sorting by fields on the main 'products' table, like 'created_at' or 'name'.
-    if (sortBy && sortBy !== "price") {
-      query = query.order(sortBy, { ascending: order === "asc" });
-    } else {
-      // Default sort if none is provided or if it's by price
-      query = query.order("created_at", { ascending: false });
-    }
+    // 3. Sorting Logic (sortBy + order)
+    const sort = typeof sortBy === 'string' ? sortBy.trim().toLowerCase() : '';
+    const sortOrder = typeof order === 'string' ? order.trim().toLowerCase() : '';
 
-    // 4. Pagination Logic
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 10;
+    // 4. Pagination params
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 10;
     const offset = (pageNum - 1) * limitNum;
 
-    const { data: products, error } = await query.range(
-      offset,
-      offset + limitNum - 1
-    );
+    // Helper to compute effective price for a variant
+    const computeEffectivePrice = (variant) => {
+      if (!variant) return Number.POSITIVE_INFINITY;
+      const base = Number(variant.price) || 0;
+      const type = variant.discount_type;
+      const value = variant.discount_value;
+      if (!type || value == null) return base;
+      if (type === 'percentage') {
+        return Math.max(0, base - (base * Number(value)) / 100);
+      }
+      // fixed amount
+      return Math.max(0, base - Number(value));
+    };
 
-    if (error) throw error;
+    // If no sortBy is provided → Featured default
+    if (!sort) {
+      const { data: products, error } = await query
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limitNum - 1);
+      if (error) throw error;
+      return res.json({ success: true, data: products });
+    }
 
-    // 5. Final Response
-    // The data now includes a 'product_variants' array for each product.
-    res.json({ success: true, data: products });
+    if (sort === 'created_at') {
+      const ascending = sortOrder === 'asc';
+      const { data: products, error } = await query
+        .order('created_at', { ascending })
+        .range(offset, offset + limitNum - 1);
+      if (error) throw error;
+      return res.json({ success: true, data: products });
+    }
+
+    // For price, best selling, and rating we need to fetch full set to sort reliably
+    const { data: allProducts, error: allErr } = await query;
+    if (allErr) throw allErr;
+
+    let enriched = allProducts || [];
+
+    if (sort === 'price') {
+      enriched = enriched.map(p => {
+        const minEffPrice = Array.isArray(p.product_variants) && p.product_variants.length > 0
+          ? Math.min(...p.product_variants.map(v => computeEffectivePrice(v)))
+          : Number.POSITIVE_INFINITY;
+        return { ...p, __minPrice: minEffPrice };
+      }).sort((a, b) => {
+        const asc = sortOrder === 'asc';
+        return asc ? (a.__minPrice - b.__minPrice) : (b.__minPrice - a.__minPrice);
+      });
+    } else if (sort === 'bestselling') {
+      const ids = enriched.map(p => p.id);
+      if (ids.length > 0) {
+        const { data: salesRows, error: salesErr } = await supabase
+          .from('order_items')
+          .select('product_id, quantity')
+          .in('product_id', ids);
+        if (salesErr) throw salesErr;
+        const productIdToSales = new Map();
+        (salesRows || []).forEach(r => {
+          const pid = r.product_id;
+          const qty = Number(r.quantity) || 0;
+          productIdToSales.set(pid, (productIdToSales.get(pid) || 0) + qty);
+        });
+        enriched = enriched.map(p => ({ ...p, __sales: productIdToSales.get(p.id) || 0 }))
+          .sort((a, b) => b.__sales - a.__sales);
+      }
+    } else if (sort === 'rating_desc') {
+      const ids = enriched.map(p => p.id);
+      if (ids.length > 0) {
+        const { data: ratingRows, error: ratingErr } = await supabase
+          .from('reviews')
+          .select('product_id, rating, is_approved')
+          .in('product_id', ids)
+          .eq('is_approved', true);
+        if (ratingErr) throw ratingErr;
+        const productIdToRating = new Map();
+        const productIdToCount = new Map();
+        (ratingRows || []).forEach(r => {
+          const pid = r.product_id;
+          const rating = Number(r.rating) || 0;
+          productIdToRating.set(pid, (productIdToRating.get(pid) || 0) + rating);
+          productIdToCount.set(pid, (productIdToCount.get(pid) || 0) + 1);
+        });
+        enriched = enriched.map(p => {
+          const sum = productIdToRating.get(p.id) || 0;
+          const cnt = productIdToCount.get(p.id) || 0;
+          const avg = cnt > 0 ? sum / cnt : 0;
+          return { ...p, __avgRating: avg };
+        }).sort((a, b) => b.__avgRating - a.__avgRating);
+      }
+    } else {
+      // Fallback to newest if unknown sortBy provided
+      const { data: products, error } = await query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limitNum - 1);
+      if (error) throw error;
+      return res.json({ success: true, data: products });
+    }
+
+    // Apply pagination on the sorted array
+    const paged = enriched.slice(offset, offset + limitNum);
+    return res.json({ success: true, data: paged });
   } catch (err) {
     next(err);
   }
@@ -142,7 +223,7 @@ exports.searchProducts = async (req, res, next) => {
         is_featured,
         brand,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value)
+        product_variants(id, price, stock_quantity, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
       `)
       .eq("is_published", true)
       .or(
@@ -202,7 +283,7 @@ exports.getProductRecommendations = async (req, res, next) => {
         name,
         slug,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, attributes, discount_type, discount_value)
+        product_variants(id, price, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
       `)
       .eq('is_published', true)
       .in('id', recommendedIds) // Use the clean array of IDs

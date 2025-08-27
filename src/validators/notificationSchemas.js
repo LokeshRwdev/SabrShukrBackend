@@ -16,3 +16,9 @@ exports.createNotificationSchema = Joi.object({
 });
 
 // TODO: Add more schemas as needed 
+
+// Schema for sending order email notification
+exports.sendOrderNotificationSchema = Joi.object({
+	customerEmail: Joi.string().email().required(),
+	orderId: Joi.number().integer().required(),
+});

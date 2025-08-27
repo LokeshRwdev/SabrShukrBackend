@@ -25,10 +25,10 @@ exports.getCart = async (req, res, next) => {
 exports.addToCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { items } = req.body; // Expect an array of { variantId, quantity }
+    const { variantId, quantity } = req.body; // Expect a single { variantId, quantity }
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'No items provided for adding to cart.' });
+    if (!variantId || typeof quantity !== 'number' || quantity <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing variantId/quantity.' });
     }
 
     const token = req.headers["authorization"]?.split(" ")[1];
@@ -38,81 +38,65 @@ exports.addToCart = async (req, res, next) => {
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
 
-    const results = [];
+    // Fetch the variant details to ensure it exists and get its stock
+    const { data: variant, error: variantFetchError } = await supabaseWithAuth
+      .from('product_variants')
+      .select('*, products(name)')
+      .eq('id', variantId)
+      .single();
 
-    for (const item of items) {
-      const { variantId, quantity } = item;
-
-      if (!variantId || typeof quantity !== 'number' || quantity <= 0) {
-        results.push({ variantId, success: false, message: 'Invalid variantId or quantity provided for an item.' });
-        continue; // Skip to the next item
+    if (variantFetchError) {
+      if (variantFetchError.code === 'PGRST116') {
+        return res.status(404).json({ success: false, message: 'Product variant not found.' });
       }
-
-      // Fetch the variant details to ensure it exists and get its stock
-      const { data: variant, error: variantFetchError } = await supabaseWithAuth
-        .from('product_variants')
-        .select('*, products(name)')
-        .eq('id', variantId)
-        .single();
-
-      if (variantFetchError) {
-        if (variantFetchError.code === 'PGRST116') {
-          results.push({ variantId, success: false, message: 'Product variant not found.' });
-          continue;
-        }
-        throw variantFetchError;
-      }
-
-      if (variant.stock_quantity < quantity) {
-        results.push({ variantId, success: false, message: `Not enough stock for ${variant.products.name} (${variant.attributes ? Object.values(variant.attributes).join(', ') : 'Variant'}). Available: ${variant.stock_quantity}, Requested: ${quantity}` });
-        continue;
-      }
-
-      // Check if the variant already exists in the cart
-      const { data: existingCartItem, error: fetchError } = await supabaseWithAuth
-        .from('cart_items')
-        .select('id, quantity')
-        .eq('user_id', userId)
-        .eq('variant_id', variantId)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
-        throw fetchError;
-      }
-
-      let operationResult;
-      if (existingCartItem) {
-        // Update quantity if item exists
-        const newQuantity = existingCartItem.quantity + quantity;
-        if (newQuantity > variant.stock_quantity) {
-          results.push({ variantId, success: false, message: `Cannot add more. Only ${variant.stock_quantity} in stock for this variant. Current in cart: ${existingCartItem.quantity}` });
-          continue;
-        }
-        operationResult = await supabaseWithAuth
-          .from('cart_items')
-          .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-          .eq('id', existingCartItem.id)
-          .select();
-      } else {
-        // Insert new item if it doesn't exist
-        operationResult = await supabaseWithAuth
-          .from('cart_items')
-          .insert({
-            user_id: userId,
-            variant_id: variantId,
-            quantity: quantity,
-          })
-          .select();
-      }
-
-      if (operationResult.error) {
-        results.push({ variantId, success: false, message: operationResult.error.message });
-      } else {
-        results.push({ variantId, success: true, data: operationResult.data[0] });
-      }
+      throw variantFetchError;
     }
 
-    res.status(200).json({ success: true, results });
+    if (variant.stock_quantity < quantity) {
+      return res.status(400).json({ success: false, message: `Not enough stock for ${variant.products.name} (${variant.attributes ? Object.values(variant.attributes).join(', ') : 'Variant'}). Available: ${variant.stock_quantity}, Requested: ${quantity}` });
+    }
+
+    // Check if the variant already exists in the cart
+    const { data: existingCartItem, error: fetchError } = await supabaseWithAuth
+      .from('cart_items')
+      .select('id, quantity')
+      .eq('user_id', userId)
+      .eq('variant_id', variantId)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows found
+      throw fetchError;
+    }
+
+    let operationResult;
+    if (existingCartItem) {
+      // Update quantity if item exists
+      const newQuantity = existingCartItem.quantity + quantity;
+      if (newQuantity > variant.stock_quantity) {
+        return res.status(400).json({ success: false, message: `Cannot add more. Only ${variant.stock_quantity} in stock for this variant. Current in cart: ${existingCartItem.quantity}` });
+      }
+      operationResult = await supabaseWithAuth
+        .from('cart_items')
+        .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+        .eq('id', existingCartItem.id)
+        .select();
+    } else {
+      // Insert new item if it doesn't exist
+      operationResult = await supabaseWithAuth
+        .from('cart_items')
+        .insert({
+          user_id: userId,
+          variant_id: variantId,
+          quantity: quantity,
+        })
+        .select();
+    }
+
+    if (operationResult.error) {
+      return res.status(400).json({ success: false, message: operationResult.error.message });
+    }
+
+    return res.status(200).json({ success: true, data: operationResult.data[0] });
   } catch (err) {
     next(err);
   }

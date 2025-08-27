@@ -11,6 +11,7 @@ router.use(adminAuthMiddleware);
 
 router.post('/check-rates', shippingController.checkRates);
 router.post('/create-order', shippingController.createShiprocketOrder);
+router.post('/create-return-order', shippingController.createShiprocketReturnOrder);
 router.post('/generate-awb', shippingController.generateAwbAndPickup);
 router.post('/generate-label', shippingController.generateLabel);
 

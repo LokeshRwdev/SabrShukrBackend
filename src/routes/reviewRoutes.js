@@ -4,9 +4,13 @@ const router = express.Router();
 const reviewController = require('../controllers/reviewController');
 const authMiddleware = require('../middlewares/auth');
 
-// Apply authentication middleware to all review-related routes
+// Protect review endpoints
 router.use(authMiddleware);
 
+// Create a review
 router.post('/', reviewController.addReview);
 
-module.exports = router; 
+// Update a review by id
+router.put('/:id', reviewController.updateReview);
+
+module.exports = router;

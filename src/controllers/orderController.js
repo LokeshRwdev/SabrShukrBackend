@@ -1,3 +1,6 @@
+const { supabase } = require('../utils/supabaseClient');
+const { shiprocketRequest } = require('../utils/shiprocketClient'); // add this import
+
 const affiliateController = require('./affiliateController'); // Import affiliate controller
 const { createClient } = require('@supabase/supabase-js');
 // Service role client (bypasses RLS for privileged ops like stock updates). NEVER expose this key to clients.
@@ -168,24 +171,99 @@ exports.placeOrder = async (req, res, next) => {
 exports.getOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
+     const token = req.headers["authorization"]?.split(" ")[1];
     const supabase = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_ANON_KEY,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
+    
+
     const { data: orders, error } = await supabase
       .from('orders')
-      .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image
+      .select(`
+        *,
+        order_items (
+          *,
+          product_variants (
+            *,
+            products (
+              name,
+              slug,
+              product_images (image_url, is_thumbnail),
+              reviews (id, rating )
+            )
+          )
+        )
+      `)
       .eq('user_id', userId)
+      // This is the key: filter the nested 'reviews' table to only get the
+      // review that belongs to the currently logged-in user.
+      .eq('order_items.product_variants.products.reviews.user_id', userId)
       .order('order_date', { ascending: false });
 
     if (error) throw error;
+    
     res.json({ success: true, data: orders });
   } catch (err) {
     next(err);
   }
 };
+
+// Replace the old fetchTrackingByOrderId with this enhanced version
+async function fetchTrackingByOrderId(orderId) {
+  try {
+    const raw = await shiprocketRequest(`courier/track?order_id=${encodeURIComponent(orderId)}`, {
+      method: 'GET'
+    });
+
+    // Normalized result array
+    const results = [];
+
+    const pushFromTrackingData = (trackingData) => {
+      if (!trackingData || typeof trackingData !== 'object') return;
+      const td = trackingData;
+      results.push({
+        track_status: td.track_status ?? null,
+        shipment_status: td.shipment_status ?? null,
+        shipment_track_activities: td.shipment_track_activities ?? [],
+        awb_code: td.awb_code ?? td.awb ?? null,
+        courier_name: td.courier_name ?? td.courier ?? null,
+        pickup_date: td.pickup_date ?? td.pickup_datetime ?? null,
+        delivered_date: td.delivered_date ?? td.delivered_datetime ?? null,
+        edd: td.edd ?? td.estimated_delivery_date ?? null,
+        courier_agent_details: td.courier_agent_details ?? null,
+        current_status: td.current_status ?? td.current_status_code ?? null,
+        is_return: td.is_return ?? false,
+      });
+    };
+
+    // Expected shape (observed earlier): [ { "<orderId>": { tracking_data: {...} } }, ... ]
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (entry && typeof entry === 'object') {
+          // Try direct key (orderId)
+            if (entry[orderId]?.tracking_data) {
+              pushFromTrackingData(entry[orderId].tracking_data);
+              continue;
+            }
+          // Otherwise take first key
+          const firstKey = Object.keys(entry)[0];
+          if (firstKey && entry[firstKey]?.tracking_data) {
+            pushFromTrackingData(entry[firstKey].tracking_data);
+          }
+        }
+      }
+    } else if (raw?.tracking_data) {
+      // Fallback if API returns single object
+      pushFromTrackingData(raw.tracking_data);
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
+}
 
 exports.getOrderById = async (req, res, next) => {
   try {
@@ -197,11 +275,12 @@ exports.getOrderById = async (req, res, next) => {
       process.env.SUPABASE_ANON_KEY,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
+
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))') // Select variant details with product and image
+      .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))')
       .eq('id', id)
-      .eq('user_id', userId) // Ensure user owns the order
+      .eq('user_id', userId)
       .single();
 
     if (error) {
@@ -210,6 +289,9 @@ exports.getOrderById = async (req, res, next) => {
       }
       throw error;
     }
+
+    // Attach detailed tracking array
+    order.tracking = await fetchTrackingByOrderId(order.id);
     res.json({ success: true, data: order });
   } catch (err) {
     next(err);

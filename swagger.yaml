@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: API documentation for the Sabr Shukr e-commerce platform backend.
 servers:
-  - url: http://localhost:5000/api
+  - url: http://localhost:8080/api
     description: Development server
   - url: https://sabrshukrbackend.onrender.com/api
     description: Production server

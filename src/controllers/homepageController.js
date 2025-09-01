@@ -1,5 +1,4 @@
-// Ensure the path to your client file is correct
-const supabase  = require('../utils/supabaseClient'); 
+const supabase  = require('../utils/supabaseClient');
 
 exports.getHomepage = async (req, res, next) => {
   try {
@@ -8,7 +7,7 @@ exports.getHomepage = async (req, res, next) => {
       throw new Error("Supabase client is not initialized.");
     }
 
-    // Fetch active banners
+    // Fetch active banners (No changes needed here)
     const { data: banners, error: bannersError } = await supabase
       .from('banners')
       .select('*')
@@ -16,23 +15,32 @@ exports.getHomepage = async (req, res, next) => {
       .order('display_order', { ascending: true });
     if (bannersError) throw bannersError;
 
+    // --- START OF FIX ---
+
     // Fetch active "watch and shop" videos
     const { data: watchAndShopVideos, error: videosError } = await supabase
       .from('watch_and_shop_videos')
+      // The .select() query is updated to follow the new nested relationship
       .select(`
         *,
-        products (
-          name,
-          slug,
-          product_images(image_url, is_thumbnail),
-          product_variants(price)
+        product_variants (
+          id,
+          price,
+          attributes,
+          products (
+            name,
+            slug,
+            product_images (image_url, is_thumbnail)
+          )
         )
       `)
       .eq('is_active', true)
       .order('display_order', { ascending: true });
     if (videosError) throw videosError;
 
-    // Fetch featured products
+    // --- END OF FIX ---
+
+    // Fetch featured products (No changes needed here)
     const { data: featuredProducts, error: productsError } = await supabase
       .from('products')
       .select(`
@@ -48,7 +56,7 @@ exports.getHomepage = async (req, res, next) => {
       .eq('is_featured', true);
     if (productsError) throw productsError;
 
-    // Fetch active parent categories
+    // Fetch active parent categories (No changes needed here)
     const { data: parentCategories, error: categoriesError } = await supabase
       .from('categories')
       .select('id, name, slug, description, image_url')

@@ -174,27 +174,53 @@ exports.getProducts = async (req, res, next) => {
   }
 };
 
+
 exports.getProductById = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { data: product, error } = await supabase
+    const { id: inputId } = req.params; // The ID from the URL, could be product or variant
+    let productId; // This will hold the ID of the parent product
+
+    // Step 1: Check if the inputId exists as a variant.
+    const { data: variantData, error: variantError } = await supabase
+      .from('product_variants')
+      .select('product_id')
+      .eq('id', inputId)
+      .single();
+
+    if (variantData) {
+      // If we found a variant, its product_id is what we need.
+      productId = variantData.product_id;
+    } else {
+      // If no variant was found, we assume the inputId is the product_id itself.
+      // We also check if it's a valid number.
+      const parsedId = parseInt(inputId, 10);
+      if (Number.isNaN(parsedId)) {
+        return res.status(400).json({ success: false, message: "Invalid ID format." });
+      }
+      productId = parsedId;
+    }
+
+    // --- END OF NEW LOGIC (ID RESOLUTION) ---
+
+    // Step 2: Now that we have the correct parent productId, fetch the full product object.
+    // This part of the code is the same as your original logic, but uses the resolved 'productId'.
+    const { data: product, error: productError } = await supabase
       .from("products")
-      .select("*, product_images(*), reviews(*), product_variants(*)") // Select all product fields, images, reviews, and product variants
-      .eq("id", id)
+      .select("*, product_images(*), reviews(*), product_variants(*)")
+      .eq("id", productId) // Use the resolved productId here
       .eq("is_published", true)
       .single();
 
-    if (error) {
-      if (error.code === "PGRST116") {
-        return res
-          .status(404)
-          .json({
+    if (productError) {
+      if (productError.code === "PGRST116") { // PostgREST code for "0 rows returned"
+        return res.status(404).json({
             success: false,
-            message: "Product not found or not published",
-          });
+            message: "Product not found or not published.",
+        });
       }
-      throw error;
+      throw productError;
     }
+
     res.json({ success: true, data: product });
   } catch (err) {
     next(err);

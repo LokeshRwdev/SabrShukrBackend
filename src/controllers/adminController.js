@@ -69,6 +69,7 @@ exports.createProduct = async (req, res, next) => {
         });
     }
 
+    // Create product with custom ID sequence to avoid conflicts
     const { data: newProduct, error: productError } = await supabaseServiceRole
       .from("products")
       .insert({
@@ -84,12 +85,28 @@ exports.createProduct = async (req, res, next) => {
 
     if (productError) throw productError;
 
+    // Validation: Ensure product and variant IDs are different
+    const conflictingVariants = variants.filter(v => v.id === newProduct.id);
+    if (conflictingVariants.length > 0) {
+      // Rollback product creation
+      await supabaseServiceRole
+        .from("products")
+        .delete()
+        .eq("id", newProduct.id);
+      
+      return res.status(409).json({
+        success: false,
+        message: "ID conflict detected between product and variant. Please retry.",
+        conflictDetails: { productId: newProduct.id, conflictingVariants }
+      });
+    }
+
     // Insert product images
     if (imageUrls && imageUrls.length > 0) {
       const imagesToInsert = imageUrls.map((url) => ({
         product_id: newProduct.id,
         image_url: url,
-        is_thumbnail: false, // You might want to add logic for one thumbnail
+        is_thumbnail: false,
       }));
       const { error: imagesError } = await supabaseServiceRole
         .from("product_images")
@@ -109,7 +126,38 @@ exports.createProduct = async (req, res, next) => {
       if (productCategoriesError) throw productCategoriesError;
     }
 
-    // Insert product variants
+    // Before inserting variants, check for existing SKUs
+    if (variants.some(v => v.sku)) {
+      const skusToCheck = variants.map(v => v.sku).filter(Boolean);
+      if (skusToCheck.length > 0) {
+        const { data: existingVariants, error: skuCheckError } = await supabaseServiceRole
+          .from('product_variants')
+          .select('sku')
+          .in('sku', skusToCheck);
+        
+        if (skuCheckError) throw skuCheckError;
+        
+        if (existingVariants && existingVariants.length > 0) {
+          const existingSkus = existingVariants.map(v => v.sku);
+          return res.status(400).json({
+            success: false,
+            message: `SKUs already exist: ${existingSkus.join(', ')}`
+          });
+        }
+      }
+    }
+
+    // Before inserting variants, validate SKUs are unique within the request
+    const skus = variants.map(v => v.sku).filter(Boolean);
+    const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
+    if (duplicateSkus.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Duplicate SKUs in request: ${duplicateSkus.join(', ')}`
+      });
+    }
+
+    // Insert product variants with conflict check
     const variantsToInsert = variants.map((variant) => ({
       product_id: newProduct.id,
       price: variant.price,
@@ -119,7 +167,6 @@ exports.createProduct = async (req, res, next) => {
       attributes: variant.attributes,
       discount_type: variant.discount_type || null,
       discount_value: variant.discount_value ?? null,
-      // New fields
       dimensions_cm: variant.dimensions_cm ?? variant.dimensions ?? null,
       weight_kg: variant.weight_kg ?? variant.weight ?? null,
     }));
@@ -131,12 +178,25 @@ exports.createProduct = async (req, res, next) => {
         .select();
 
     if (variantsError) {
-      // If variant creation fails, consider rolling back product creation
       await supabaseServiceRole
         .from("products")
         .delete()
         .eq("id", newProduct.id);
       throw variantsError;
+    }
+
+    // Final validation: Check if any inserted variant has same ID as product
+    const conflictingInsertedVariants = newVariants.filter(v => v.id === newProduct.id);
+    if (conflictingInsertedVariants.length > 0) {
+      // Rollback everything
+      await supabaseServiceRole.from("products").delete().eq("id", newProduct.id);
+      await supabaseServiceRole.from("product_variants").delete().in("id", newVariants.map(v => v.id));
+      
+      return res.status(409).json({
+        success: false,
+        message: "ID conflict detected after variant creation. Transaction rolled back.",
+        conflictDetails: { productId: newProduct.id, conflictingVariants: conflictingInsertedVariants }
+      });
     }
 
     res
@@ -291,6 +351,25 @@ exports.updateProduct = async (req, res, next) => {
 exports.deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
+    
+    // Check if product has any order items (historical orders)
+    const { data: orderItems, error: orderCheckError } = await supabaseServiceRole
+      .from("order_items")
+      .select("id")
+      .eq("product_id", id)
+      .limit(1);
+    
+    if (orderCheckError) throw orderCheckError;
+    
+    if (orderItems && orderItems.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete product. It has been ordered by customers. Consider unpublishing instead.",
+        suggestion: "Use PUT /products/:id with is_published: false to hide this product."
+      });
+    }
+    
+    // Safe to delete if no order history
     const { error } = await supabaseServiceRole
       .from("products")
       .delete()

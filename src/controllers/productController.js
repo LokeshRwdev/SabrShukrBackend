@@ -266,59 +266,140 @@ exports.searchProducts = async (req, res, next) => {
 
 exports.getProductRecommendations = async (req, res, next) => {
   try {
-    const { id: currentProductId } = req.params; // The ID of the product being viewed
-    const limit = parseInt(req.query.limit) || 5; // Default to 5 recommendations
+    const { id: currentProductId } = req.params;
+    const requestedLimit = parseInt(req.query.limit) || 5;
 
-    // Step 1: Find the category ID of the current product.
-    const { data: categoryData, error: categoryError } = await supabase
+    // Business rule: ALWAYS try to return at least 4
+    const MIN_RECOMMENDATIONS = 4;
+    const effectiveLimit = Math.max(requestedLimit, MIN_RECOMMENDATIONS);
+
+    // 1. All category ids for the current product (a product may belong to multiple)
+    const { data: productCatRows, error: prodCatErr } = await supabase
       .from('product_categories')
       .select('category_id')
-      .eq('product_id', currentProductId)
-      .limit(1)
-      .single();
+      .eq('product_id', currentProductId);
 
-    if (categoryError || !categoryData) {
-      // If the product has no category, we can't find recommendations.
-      return res.json({ success: true, data: [] });
+    if (prodCatErr) throw prodCatErr;
+
+    // If product has no categories → fallback to global picks
+    const currentCategoryIds = (productCatRows || []).map(r => r.category_id);
+
+    // Helper: fetch full product objects by ids
+    const fetchProductsByIds = async (ids, limit) => {
+      if (!ids || ids.length === 0) return [];
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          slug,
+          product_images(image_url, is_thumbnail),
+          product_variants(id, price, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
+        `)
+        .eq('is_published', true)
+        .in('id', ids.slice(0, limit));
+      if (error) throw error;
+      return data || [];
+    };
+
+    const recommendedSet = new Set(); // product IDs
+    const orderedRecommendations = []; // keep insertion order (same category first)
+
+    // 2. PRIMARY: Products from the SAME categories (excluding current)
+    if (currentCategoryIds.length > 0) {
+      const { data: sameCatProductRows, error: sameCatErr } = await supabase
+        .from('product_categories')
+        .select('product_id, category_id')
+        .in('category_id', currentCategoryIds)
+        .neq('product_id', currentProductId);
+
+      if (sameCatErr) throw sameCatErr;
+
+      // Preserve order: group by product_id once
+      const sameCatIdsUnique = [];
+      const seen = new Set();
+      (sameCatProductRows || []).forEach(r => {
+        if (!seen.has(r.product_id)) {
+          seen.add(r.product_id);
+          sameCatIdsUnique.push(r.product_id);
+        }
+      });
+
+      const sameCategoryProducts = await fetchProductsByIds(sameCatIdsUnique, effectiveLimit);
+      sameCategoryProducts.forEach(p => {
+        if (!recommendedSet.has(p.id) && recommendedSet.size < effectiveLimit) {
+          recommendedSet.add(p.id);
+          orderedRecommendations.push(p);
+        }
+      });
     }
 
-    const targetCategoryId = categoryData.category_id;
+    // 3. DIVERSITY: If all we have so far are from ONLY the same categories OR count < effectiveLimit
+    //    Add products from OTHER categories to ensure diversity & reach minimum.
+    if (recommendedSet.size < effectiveLimit) {
+      // Find product IDs that are in categories NOT among currentCategoryIds
+      const { data: otherCatProductRows, error: otherCatErr } = await supabase
+        .from('product_categories')
+        .select('product_id')
+        .neq('product_id', currentProductId)
+        .not('category_id', 'in', currentCategoryIds.length > 0 ? `(${currentCategoryIds.join(',')})` : '(0)');
 
-    // Step 2: Get a list of all product IDs in that same category, excluding the current one.
-    const { data: recommendedIdsData, error: idsError } = await supabase
-      .from('product_categories')
-      .select('product_id')
-      .eq('category_id', targetCategoryId)
-      .neq('product_id', currentProductId); // Exclude the current product ID
+      if (otherCatErr) throw otherCatErr;
 
-    if (idsError) throw idsError;
+      const otherIdsUnique = [];
+      const seenOther = new Set();
+      (otherCatProductRows || []).forEach(r => {
+        if (!seenOther.has(r.product_id) && !recommendedSet.has(r.product_id)) {
+          seenOther.add(r.product_id);
+          otherIdsUnique.push(r.product_id);
+        }
+      });
 
-    // If no other products are in the category, return an empty array.
-    if (!recommendedIdsData || recommendedIdsData.length === 0) {
-      return res.json({ success: true, data: [] });
+      if (otherIdsUnique.length > 0) {
+        const fillNeeded = effectiveLimit - recommendedSet.size;
+        const otherProducts = await fetchProductsByIds(otherIdsUnique, fillNeeded);
+        otherProducts.forEach(p => {
+            if (!recommendedSet.has(p.id) && recommendedSet.size < effectiveLimit) {
+              recommendedSet.add(p.id);
+              orderedRecommendations.push(p);
+            }
+        });
+      }
     }
 
-    const recommendedIds = recommendedIdsData.map(p => p.product_id);
+    // 4. GLOBAL FALLBACK: If still below minimum (catalog too small / product uncategorized)
+    if (recommendedSet.size < MIN_RECOMMENDATIONS) {
+      const need = MIN_RECOMMENDATIONS - recommendedSet.size;
+      if (need > 0) {
+        const { data: globalProducts, error: globalErr } = await supabase
+          .from('products')
+          .select(`
+            id,
+            name,
+            slug,
+            product_images(image_url, is_thumbnail),
+            product_variants(id, price, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
+          `)
+          .eq('is_published', true)
+          .neq('id', currentProductId)
+          .limit(need * 3); // fetch extra to filter duplicates
 
-    // Step 3: Now, fetch the full details for that clean list of product IDs.
-    // This query is now much simpler for the database to execute.
-    const { data: recommendations, error: recommendationsError } = await supabase
-      .from('products')
-      .select(`
-        id,
-        name,
-        slug,
-        product_images(image_url, is_thumbnail),
-        product_variants(id, price, attributes, discount_type, discount_value, dimensions_cm, weight_kg)
-      `)
-      .eq('is_published', true)
-      .in('id', recommendedIds) // Use the clean array of IDs
-      .limit(limit);
+        if (globalErr) throw globalErr;
 
-    if (recommendationsError) throw recommendationsError;
+        (globalProducts || []).forEach(p => {
+          if (recommendedSet.size >= MIN_RECOMMENDATIONS) return;
+          if (!recommendedSet.has(p.id)) {
+            recommendedSet.add(p.id);
+            orderedRecommendations.push(p);
+          }
+        });
+      }
+    }
 
-    return res.json({ success: true, data: recommendations });
+    // 5. Trim to effectiveLimit (respect user-requested limit but ensure min 4 already applied)
+    const finalList = orderedRecommendations.slice(0, effectiveLimit);
 
+    return res.json({ success: true, data: finalList });
   } catch (err) {
     next(err);
   }

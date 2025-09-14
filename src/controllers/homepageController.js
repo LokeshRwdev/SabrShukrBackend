@@ -50,7 +50,7 @@ exports.getHomepage = async (req, res, next) => {
         description,
         brand,
         product_images(image_url, is_thumbnail),
-        product_variants(id, price, attributes)
+        product_variants(id, price, attributes, discount_type,discount_value)
       `)
       .eq('is_published', true)
       .eq('is_featured', true);

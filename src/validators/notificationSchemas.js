@@ -20,5 +20,18 @@ exports.createNotificationSchema = Joi.object({
 // Schema for sending order email notification
 exports.sendOrderNotificationSchema = Joi.object({
 	customerEmail: Joi.string().email().required(),
-	orderId: Joi.number().integer().required(),
+	orderId: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
+	customerName: Joi.string().optional(),
+	orderItems: Joi.array().items(
+		Joi.object({
+			name: Joi.string().required(),
+			quantity: Joi.number().positive().required(),
+			price: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
+			image: Joi.string().uri().optional()
+		})
+	).optional(),
+	subtotal: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+	shipping: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+	taxes: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+	total: Joi.alternatives().try(Joi.number(), Joi.string()).optional()
 });

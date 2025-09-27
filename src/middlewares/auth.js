@@ -15,3 +15,14 @@ module.exports = async function (req, res, next) {
   req.user = data.user;
   next();
 }; 
+
+// In your auth middleware (middleware/auth.js or similar)
+exports.authenticateToken = (req, res, next) => {
+  console.log('Auth Debug:', {
+    headers: req.headers.authorization,
+    token: req.headers.authorization?.replace('Bearer ', ''),
+    cookies: req.cookies
+  });
+  
+  // ... rest of auth logic
+};

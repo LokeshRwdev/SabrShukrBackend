@@ -4033,9 +4033,8 @@ paths:
     post:
       tags:
         - Notifications
-      summary: Send an order confirmation email to the customer (Admin Only)
-      security:
-        - bearerAuth: []
+      summary: Send order confirmation email
+      description: Sends a branded order confirmation email to the customer with order details and summary
       requestBody:
         required: true
         content:
@@ -4049,11 +4048,97 @@ paths:
                 customerEmail:
                   type: string
                   format: email
+                  description: Customer's email address
+                  example: "customer@example.com"
                 orderId:
-                  type: integer
+                  oneOf:
+                    - type: integer
+                    - type: string
+                  description: Unique order identifier
+                  example: 483513
+                customerName:
+                  type: string
+                  description: Customer's name for personalization
+                  example: "Lokesh"
+                orderItems:
+                  type: array
+                  description: List of items in the order
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - quantity
+                      - price
+                    properties:
+                      name:
+                        type: string
+                        description: Product name
+                        example: "Nadira Flora Wall Art - Set Of Three"
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        description: Quantity ordered
+                        example: 1
+                      price:
+                        oneOf:
+                          - type: string
+                          - type: number
+                        description: Item price (total for quantity)
+                        example: "899.00"
+                      image:
+                        type: string
+                        format: uri
+                        description: Product image URL
+                        example: "https://example.com/product-image.jpg"
+                subtotal:
+                  oneOf:
+                    - type: string
+                    - type: number
+                  description: Order subtotal amount
+                  example: "899.00"
+                shipping:
+                  oneOf:
+                    - type: string
+                    - type: number
+                  description: Shipping charges
+                  example: "49.00"
+                taxes:
+                  oneOf:
+                    - type: string
+                    - type: number
+                  description: Tax amount
+                  example: "144.61"
+                total:
+                  oneOf:
+                    - type: string
+                    - type: number
+                  description: Total order amount
+                  example: "948.00"
+            examples:
+              full-order:
+                summary: Complete order with all details
+                value:
+                  customerEmail: "customer@example.com"
+                  orderId: 483513
+                  customerName: "Lokesh"
+                  orderItems:
+                    - name: "Nadira Flora Wall Art - Set Of Three"
+                      quantity: 1
+                      price: "899.00"
+                      image: "https://example.com/product-image.jpg"
+                  subtotal: "899.00"
+                  shipping: "49.00"
+                  taxes: "144.61"
+                  total: "948.00"
+              minimal-order:
+                summary: Minimal required fields only
+                value:
+                  customerEmail: "customer@example.com"
+                  orderId: 12345
+                  customerName: "John Doe"
       responses:
-        '200':
-          description: Email queued/sent successfully
+        200:
+          description: Email sent successfully
           content:
             application/json:
               schema:
@@ -4061,19 +4146,43 @@ paths:
                 properties:
                   success:
                     type: boolean
+                    example: true
                   data:
                     type: object
                     properties:
                       messageId:
                         type: string
-        '400':
-          description: Missing or invalid inputs
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden (Admin role required)
-        '500':
-          description: Error sending email
+                        description: Brevo message ID for tracking
+                        example: "<202509221722.28716141151@smtp-relay.mailin.fr>"
+                      service:
+                        type: string
+                        example: "brevo"
+        400:
+          description: Validation error - missing required fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "customerEmail and orderId are required"
+        500:
+          description: Server error - failed to send email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Failed to send order confirmation email. Please try again later."
   /referrals/{userId}:
     get:
       tags:
@@ -4166,7 +4275,7 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: OTP sent successfully
+                    example: "OTP sent successfully"
                   data:
                     type: object
                     description: Supabase response data

@@ -11,7 +11,7 @@ router.get('/:userId', validate(getNotificationsByUserSchema), notificationContr
 // Create a new notification (Admin Only)
 router.post('/', adminAuth, validate(createNotificationSchema), notificationController.createNotification);
 
-// Send order email notification (Admin Only)
-router.post('/send-order-email', adminAuth, validate(sendOrderNotificationSchema), notificationController.sendOrderNotification);
+// Send order email notification (Public endpoint - no auth required)
+router.post('/send-order-email', validate(sendOrderNotificationSchema), notificationController.sendOrderNotification);
 
-module.exports = router; 
+module.exports = router;

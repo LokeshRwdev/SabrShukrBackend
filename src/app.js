@@ -9,7 +9,7 @@ const bodyParser = require("body-parser");
 const path = require("path");
 
 const allowedOrigins = [
-  "http://localhost:8080",
+  "http://localhost:8080",  
   "https://admin.sabrshukr.store",
   "https://sabrshukr.store",
   "http://localhost:5000",
@@ -110,5 +110,8 @@ app.use("/api/webhooks", webhookRoutes);
 // Error handling middleware (to be implemented)
 const errorHandler = require("./middlewares/errorHandler");
 app.use(errorHandler);
+
+const delhiveryRoutes = require('./routes/delhiveryRoutes');
+app.use('/api', delhiveryRoutes);
 
 module.exports = app;

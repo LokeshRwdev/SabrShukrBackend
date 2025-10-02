@@ -1,6 +1,26 @@
 // Notification Controller
 const supabase = require("../utils/supabaseClient");
-const { sendEmail } = require("../utils/bervo"); // Import Brevo utility
+const { sendEmail } = require("../utils/bervo");
+const jwt = require("jsonwebtoken"); // <-- add
+
+function extractEmailFromAuth(req) {
+  try {
+    const header = req.headers?.authorization || req.headers?.Authorization;
+    if (!header || !header.startsWith("Bearer ")) return null;
+    const token = header.slice(7);
+
+    // Prefer verifying with SUPABASE_JWT_SECRET if available
+    if (process.env.SUPABASE_JWT_SECRET) {
+      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
+      return payload?.email || payload?.user_metadata?.email || null;
+    }
+    // Fallback: decode without verify (still fine for non-sensitive use)
+    const decoded = jwt.decode(token);
+    return decoded?.email || decoded?.user_metadata?.email || null;
+  } catch {
+    return null;
+  }
+}
 
 // GET /api/notifications/:userId
 exports.getNotificationsByUser = async (req, res, next) => {
@@ -59,11 +79,11 @@ exports.createNotification = async (req, res, next) => {
 };
 
 // POST /api/notifications/send-order-email
-// Body: { customerEmail: string, orderId: number }
+// Body: { orderId: number, ...optional details... }
 exports.sendOrderNotification = async (req, res, next) => {
   try {
     const {
-      customerEmail,
+      customerEmail, // optional now; kept for backward compatibility
       orderId,
       customerName,
       orderItems,
@@ -73,11 +93,15 @@ exports.sendOrderNotification = async (req, res, next) => {
       total,
     } = req.body || {};
 
+    // Resolve email: prefer token email, else body
+    const resolvedEmail = extractEmailFromAuth(req) || customerEmail;
+
     // Validation
-    if (!customerEmail || orderId == null || orderId === "") {
+    if (!resolvedEmail || orderId == null || orderId === "") {
       return res.status(400).json({
         success: false,
-        message: "customerEmail and orderId are required",
+        message:
+          "orderId is required and either a valid Authorization token or customerEmail must be provided",
       });
     }
 
@@ -136,7 +160,7 @@ exports.sendOrderNotification = async (req, res, next) => {
             </div>
             
             <div class="message">
-              We can’t wait for you to receive your SabrShukr product — something created with love, calmness, and care. ✨ We hope it adds a gentle touch of balance and serenity to your everyday rituals, making your wellness journey a little more soothing and joyful. 🌸
+              We can’t wait for you to receive your SabrShukr product — something created with love, calmness, and care.
             </div>
 
             <!-- CTA Buttons -->
@@ -203,7 +227,7 @@ exports.sendOrderNotification = async (req, res, next) => {
               Please do not reply to this email. For any query, contact us on 
               <a href="mailto:support@sabrshukr.store" style="color: #007bff;">support@sabrshukr.store</a>
             </div>
-              <div style="margin-top: 20px; color: #666;">
+            <div style="margin-top: 20px; color: #666;">
               With Gratitude,
             </div>
             
@@ -215,7 +239,7 @@ exports.sendOrderNotification = async (req, res, next) => {
           <!-- Footer -->
           <div class="footer">
             <p>© 2025 SabrShukr. All rights reserved.</p>
-            <p>This email was sent to ${customerEmail}</p>
+            <p>This email was sent to ${resolvedEmail}</p>
           </div>
         </div>
       </body>
@@ -224,7 +248,7 @@ exports.sendOrderNotification = async (req, res, next) => {
 
     // Use Brevo to send email
     const response = await sendEmail(
-      customerEmail,
+      resolvedEmail,
       customerName || "Valued Customer",
       subject,
       htmlContent
@@ -239,11 +263,9 @@ exports.sendOrderNotification = async (req, res, next) => {
     });
   } catch (err) {
     console.error("Error sending order notification:", err);
-
     return res.status(500).json({
       success: false,
-      message:
-        "Failed to send order confirmation email. Please try again later.",
+      message: "Failed to send order confirmation email. Please try again later.",
     });
   }
 };

@@ -19,19 +19,22 @@ exports.createNotificationSchema = Joi.object({
 
 // Schema for sending order email notification
 exports.sendOrderNotificationSchema = Joi.object({
-	customerEmail: Joi.string().email().required(),
 	orderId: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
-	customerName: Joi.string().optional(),
+
+	// Optional: email comes from Authorization Bearer token if present
+	customerEmail: Joi.string().email().optional(),
+
+	customerName: Joi.string().max(200).optional(),
 	orderItems: Joi.array().items(
 		Joi.object({
 			name: Joi.string().required(),
-			quantity: Joi.number().positive().required(),
+			quantity: Joi.alternatives().try(Joi.number().integer().min(1), Joi.string()).required(),
 			price: Joi.alternatives().try(Joi.number(), Joi.string()).required(),
-			image: Joi.string().uri().optional()
+			image: Joi.string().uri().optional(),
 		})
 	).optional(),
 	subtotal: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
 	shipping: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
 	taxes: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
-	total: Joi.alternatives().try(Joi.number(), Joi.string()).optional()
-});
+	total: Joi.alternatives().try(Joi.number(), Joi.string()).optional(),
+}).unknown(true); // allow additional fields

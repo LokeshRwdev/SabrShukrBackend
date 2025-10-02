@@ -83,8 +83,11 @@ app.use("/api/coupons", couponRoutes);
 const referralRoutes = require("./routes/referralRoutes");
 app.use("/api/referrals", referralRoutes);
 
-const notificationRoutes = require("./routes/notificationRoutes");
-app.use("/api/notifications", notificationRoutes);
+const notificationRoutes = require('./routes/notificationRoutes');
+// Main mount (plural)
+app.use('/api/notifications', notificationRoutes);
+// Alias (singular) to support both paths
+app.use('/api/notification', notificationRoutes);
 
 const affiliateRoutes = require("./routes/affiliateRoutes");
 app.use("/api/affiliates", affiliateRoutes);

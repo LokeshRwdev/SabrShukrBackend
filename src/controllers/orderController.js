@@ -77,7 +77,7 @@ exports.placeOrder = async (req, res, next) => {
     if (typeof clientDiscountAmount === 'number') computedDiscount = clientDiscountAmount;
     if (!Number.isFinite(computedDiscount) || computedDiscount < 0) computedDiscount = 0;
     if (computedDiscount > totalAmount) computedDiscount = totalAmount;
-    const GIFT_WRAP_FEE = 30;
+    const GIFT_WRAP_FEE = 89;
     const isGiftWrapped = Boolean(applyGiftWrap);
     const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
     const finalAmount = totalAmount - computedDiscount + giftWrapFee;

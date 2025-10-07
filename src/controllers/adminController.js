@@ -2,42 +2,78 @@ const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 
 exports.getDashboardStats = async (req, res, next) => {
   try {
-    // Total sales (sum of final_amount from completed/paid orders)
-    const { data: salesData, error: salesError } = await supabaseServiceRole
-      .from("orders")
-      .select("final_amount")
-      .in("payment_status", ["paid"])
-      .in("status", ["delivered", "shipped"]);
+    // Step 1: Determine the time frame from the query parameter (e.g., /api/admin/dashboard?timeframe=monthly)
+    const timeframe = req.query.timeframe || 'monthly'; // Default to monthly
+    const now = new Date();
+    let startDate;
 
-    if (salesError) throw salesError;
-    const totalSales = salesData.reduce(
-      (sum, order) => sum + order.final_amount,
-      0
-    );
+    switch (timeframe) {
+      case 'daily':
+        startDate = new Date(now.setHours(0, 0, 0, 0));
+        break;
+      case 'quarterly':
+        const quarter = Math.floor(now.getMonth() / 3);
+        startDate = new Date(now.getFullYear(), quarter * 3, 1);
+        break;
+      case 'yearly':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      case 'monthly':
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+    }
+    const startDateISO = startDate.toISOString();
 
-    // New users (count of profiles created recently, e.g., last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const { count: newUsers, error: newUsersError } = await supabaseServiceRole
-      .from("profiles")
-      .select("id", { count: "exact" })
-      .gte("created_at", thirtyDaysAgo.toISOString());
-    if (newUsersError) throw newUsersError;
+    // Step 2: Run all queries in parallel for maximum efficiency
+    const [
+      revenueResult,
+      orderCountsResult,
+      totalUsersResult,
+      recentOrdersResult
+    ] = await Promise.all([
+      // Query 1: Get Total Revenue for the time frame by calling the RPC function
+      supabaseServiceRole.rpc('get_total_revenue', { start_date: startDateISO }),
 
-    // Recent orders
-    const { data: recentOrders, error: recentOrdersError } =
-      await supabaseServiceRole
-        .from("orders")
-        .select("*, profiles(full_name)")
-        .order("order_date", { ascending: false })
-        .limit(10);
-    if (recentOrdersError) throw recentOrdersError;
+      // Query 2: Get Order Status Counts for the time frame by calling the RPC function
+      supabaseServiceRole.rpc('get_order_status_counts', { start_date: startDateISO }),
 
+      // Query 3: Get Total User Count (lifetime)
+      supabaseServiceRole.auth.admin.listUsers({ page: 1, perPage: 1 }),
+
+      // Query 4: Get Recent Orders (this is not time-filtered, it's always the latest)
+      supabaseServiceRole.from("orders").select("*, profiles(full_name)").order("order_date", { ascending: false }).limit(10)
+    ]);
+
+    // Step 3: Process the results from the parallel queries
+    
+    // Process Revenue
+    if (revenueResult.error) throw revenueResult.error;
+    const totalRevenue = revenueResult.data;
+
+    // Process Order Counts
+    if (orderCountsResult.error) throw orderCountsResult.error;
+    const orderStatusCounts = orderCountsResult.data.reduce((acc, { status, status_count }) => {
+      acc[status] = status_count;
+      return acc;
+    }, { delivered: 0, pending: 0, processing: 0, cancelled: 0 }); // Initialize with defaults
+
+    // Process Total Users
+    if (totalUsersResult.error) throw totalUsersResult.error;
+    const totalUsers = totalUsersResult.data.total;
+
+    // Process Recent Orders
+    if (recentOrdersResult.error) throw recentOrdersResult.error;
+    const recentOrders = recentOrdersResult.data;
+
+    // Step 4: Send the final, formatted response
     res.json({
       success: true,
       data: {
-        totalSales,
-        newUsers,
+        timeframe,
+        totalRevenue,
+        totalUsers,
+        orderStatusCounts,
         recentOrders,
       },
     });

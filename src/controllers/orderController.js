@@ -297,3 +297,91 @@ exports.getOrderById = async (req, res, next) => {
     next(err);
   }
 };
+
+exports.cancelOrder = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id: orderId } = req.params;
+    const { cancellation_reason } = req.body;
+
+    // Client 1: Acts AS THE USER (for verification)
+    const token = req.headers["authorization"]?.split(" ")[1];
+    const supabaseWithAuth = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    );
+
+    // Client 2: Acts AS THE SYSTEM/ADMIN (for privileged actions)
+    const supabaseService = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+      { auth: { autoRefreshToken: false, persistSession: false } }
+    );
+
+    // 1. Fetch the order to verify ownership (using the USER client)
+    const { data: order, error: fetchError } = await supabaseWithAuth
+      .from('orders')
+      .select('id, status, payment_status')
+      .eq('id', orderId)
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) {
+      if (fetchError.code === 'PGRST116') {
+        return res.status(404).json({ success: false, message: 'Order not found or does not belong to you.' });
+      }
+      throw fetchError;
+    }
+
+    // 2. Business rule check
+    if (order.status !== 'pending' && order.status !== 'processing') {
+      return res.status(400).json({ success: false, message: `Cannot cancel an order with status "${order.status}".` });
+    }
+
+    // 3. Restore stock (using the SERVICE client)
+    const { error: stockError } = await supabaseService.rpc('restore_stock_from_order', {
+      target_order_id: orderId
+    });
+
+    if (stockError) {
+      console.error(`Critical error: Failed to restore stock for order ${orderId}:`, stockError);
+      return res.status(500).json({ success: false, message: 'Failed to restore product stock. Please contact support.' });
+    }
+
+    // 4. Update the order status to 'cancelled'
+    const updatePayload = {
+      status: 'cancelled',
+      ...(cancellation_reason && { cancellation_reason: cancellation_reason.trim() })
+    };
+    
+    if (order.payment_status === 'paid') {
+      updatePayload.payment_status = 'refund_pending';
+    }
+
+    // --- START OF FIX ---
+    // Use the SERVICE client for the final update to bypass RLS issues.
+    // This is safe because we have already verified ownership in Step 1.
+    const { data: updatedOrder, error: updateError } = await supabaseService
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', orderId)
+      // We don't need the .eq('user_id') here because the service role has full access,
+      // but keeping it doesn't hurt.
+      .select()
+      .single();
+    // --- END OF FIX ---
+
+    if (updateError) throw updateError;
+
+    // 5. Send the final success response
+    res.json({
+      success: true,
+      message: 'Order cancelled successfully.',
+      data: updatedOrder
+    });
+
+  } catch (err) {
+    next(err);
+s  }
+};

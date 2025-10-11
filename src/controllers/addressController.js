@@ -14,7 +14,8 @@ exports.getAddresses = async (req, res, next) => {
       .from("addresses")
       .select("*")
       .eq("user_id", userId)
-      .order("is_default", { ascending: false });
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false }); // Add this line - newest first
 
     if (error) throw error;
     res.json({ success: true, data: addresses });

@@ -1,30 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const couponController = require('../controllers/couponController');
-const validate = require('../middlewares/validate');
-const { applyCouponSchema, unapplyCouponSchema, createCouponSchema, updateCouponSchema } = require('../validators/couponSchemas');
-const auth = require('../middlewares/auth');
-const adminAuth = require('../middlewares/adminAuth');
+const authMiddleware = require('../middlewares/auth');
+const adminMiddleware = require('../middlewares/adminAuth');
 
-// Apply a coupon during checkout
-router.post('/apply', validate(applyCouponSchema), couponController.applyCoupon);
+// Public routes
+router.post('/apply', couponController.applyCoupon);
+router.post('/unapply', couponController.unapplyCoupon);
 
-// Unapply a coupon
-router.post('/unapply', validate(unapplyCouponSchema), couponController.unapplyCoupon);
+// NEW: Public endpoint for visible coupons only
+router.get('/public', couponController.getPublicCoupons);
 
-// Get coupon details by ID
-router.get('/:id', couponController.getCouponById);
+// Admin routes (require auth + admin)
+router.get('/', authMiddleware, adminMiddleware, couponController.getAllCoupons);
+router.get('/:id', authMiddleware, adminMiddleware, couponController.getCouponById);
+router.post('/', authMiddleware, adminMiddleware, couponController.createCoupon);
 
-// List all active coupons
-router.get('/', couponController.getActiveCoupons);
+// Support both PATCH and PUT for updates
+router.patch('/:id', authMiddleware, adminMiddleware, couponController.updateCoupon);
+router.put('/:id', authMiddleware, adminMiddleware, couponController.updateCoupon); // ADD THIS LINE
 
-// Create a new coupon (Admin only)
-router.post('/', auth, adminAuth, validate(createCouponSchema), couponController.createCoupon);
+router.delete('/:id', authMiddleware, adminMiddleware, couponController.deleteCoupon);
 
-// Update a coupon (Admin only)
-router.put('/:id', auth, adminAuth, validate(updateCouponSchema), couponController.updateCoupon);
-
-// Delete a coupon (Admin only)
-router.delete('/:id', auth, adminAuth, couponController.deleteCoupon);
-
-module.exports = router; 
+module.exports = router;

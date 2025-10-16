@@ -177,10 +177,9 @@ exports.getProducts = async (req, res, next) => {
 
 exports.getProductById = async (req, res, next) => {
   try {
-    const { id: inputId } = req.params; // The ID from the URL, could be product or variant
-    let productId; // This will hold the ID of the parent product
+    const { id: inputId } = req.params;
+    let productId;
 
-    // Step 1: Check if the inputId exists as a variant.
     const { data: variantData, error: variantError } = await supabase
       .from('product_variants')
       .select('product_id')
@@ -188,11 +187,8 @@ exports.getProductById = async (req, res, next) => {
       .single();
 
     if (variantData) {
-      // If we found a variant, its product_id is what we need.
       productId = variantData.product_id;
     } else {
-      // If no variant was found, we assume the inputId is the product_id itself.
-      // We also check if it's a valid number.
       const parsedId = parseInt(inputId, 10);
       if (Number.isNaN(parsedId)) {
         return res.status(400).json({ success: false, message: "Invalid ID format." });
@@ -200,25 +196,51 @@ exports.getProductById = async (req, res, next) => {
       productId = parsedId;
     }
 
-    // --- END OF NEW LOGIC (ID RESOLUTION) ---
-
-    // Step 2: Now that we have the correct parent productId, fetch the full product object.
-    // This part of the code is the same as your original logic, but uses the resolved 'productId'.
+    // CHANGED: Updated select to join users table and get full_name
     const { data: product, error: productError } = await supabase
       .from("products")
-      .select("*, product_images(*), reviews(*), product_variants(*)")
-      .eq("id", productId) // Use the resolved productId here
+      .select(`
+        *,
+        product_images(*),
+        reviews(
+          id,
+          rating,
+          comment,
+          media_urls,
+          created_at,
+          updated_at,
+          is_approved,
+          user:user_id(full_name)
+        ),
+        product_variants(*)
+      `)
+      .eq("id", productId)
       .eq("is_published", true)
+      .eq("reviews.is_approved", true)
       .single();
 
     if (productError) {
-      if (productError.code === "PGRST116") { // PostgREST code for "0 rows returned"
+      if (productError.code === "PGRST116") {
         return res.status(404).json({
-            success: false,
-            message: "Product not found or not published.",
+          success: false,
+          message: "Product not found or not published.",
         });
       }
       throw productError;
+    }
+
+    // CHANGED: Transform reviews to flatten user data
+    if (product && Array.isArray(product.reviews)) {
+      product.reviews = product.reviews.map(review => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.comment,
+        media_urls: review.media_urls,
+        created_at: review.created_at,
+        updated_at: review.updated_at,
+        is_approved: review.is_approved,
+        full_name: review.user?.full_name || 'Anonymous'
+      }));
     }
 
     res.json({ success: true, data: product });

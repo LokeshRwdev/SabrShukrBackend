@@ -10,43 +10,35 @@ exports.addReview = async (req, res, next) => {
       process.env.SUPABASE_ANON_KEY,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
-    const { productId, rating, comment, images, videos } = req.body;
+    const { productId, rating, comment, media_urls } = req.body;
 
-    // Normalize optional media arrays
+    // Validate required fields
+    if (!productId || !rating) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'productId and rating are required.' 
+      });
+    }
+
+    // Normalize and validate media_urls (max 5 items)
     const toArray = (value) =>
       Array.isArray(value)
         ? value
         : (typeof value === 'string' && value.trim().length > 0)
         ? [value]
         : [];
+    
     const sanitizeUrls = (arr) =>
       arr
         .filter((u) => typeof u === 'string')
         .map((u) => u.trim())
         .filter((u) => u.length > 0 && /^https?:\/\//i.test(u))
-        .slice(0, 10); // Limit to 10 of each to avoid abuse
-    const imageUrls = sanitizeUrls(toArray(images));
-    const videoUrls = sanitizeUrls(toArray(videos));
+        .slice(0, 5); // Limit to 5 media items max
 
-    // Step 1: First, get all order IDs for the current user.
-    const { data: orders, error: ordersError } = await supabaseWithAuth
-      .from('orders')
-      .select('id')
-      .eq('user_id', userId);
+    const mediaUrls = sanitizeUrls(toArray(media_urls));
 
-    if (ordersError) throw ordersError;
-
-    // If the user has no orders, they can't have purchased the product.
-    if (!orders || orders.length === 0) {
-      return res.status(403).json({ success: false, message: 'You can only review products you have purchased.' });
-    }
-
-    // Create an array of just the IDs from the orders result.
-    const orderIds = orders.map(order => order.id);
-
-    // Step 2: Now, check if any of those orders contain the specific product.
-    // Use the `count` returned by Supabase when using { count: 'exact' }.
-     const { count, error: purchaseError } = await supabaseWithAuth
+    // Step 1: Check if user has purchased this product
+    const { count, error: purchaseError } = await supabaseWithAuth
       .from('order_items')
       .select('*, orders!inner(*)', { count: 'exact', head: true })
       .eq('product_id', productId)
@@ -54,33 +46,41 @@ exports.addReview = async (req, res, next) => {
 
     if (purchaseError) throw purchaseError;
 
-    // If the count is 0, the user has not purchased this item.
     if (count === 0) {
-      return res.status(403).json({ success: false, message: 'You can only review products you have purchased.' });
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You can only review products you have purchased.' 
+      });
     }
 
-    // Insert the review
+    // Step 2: Insert the review with new media_urls field
     const { data: newReview, error: reviewError } = await supabaseWithAuth
       .from('reviews')
       .insert({
         user_id: userId,
         product_id: productId,
         rating,
-        comment,
-        ...(imageUrls.length ? { images: imageUrls } : {}),
-        ...(videoUrls.length ? { videos: videoUrls } : {}),
+        comment: comment || null,
+        ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : {}),
       })
       .select()
       .single();
 
     if (reviewError) {
       if (reviewError.code === '23505') { // Unique violation
-        return res.status(409).json({ success: false, message: 'You have already reviewed this product.' });
+        return res.status(409).json({ 
+          success: false, 
+          message: 'You have already reviewed this product.' 
+        });
       }
       throw reviewError;
     }
 
-    res.status(201).json({ success: true, data: newReview });
+    res.status(201).json({ 
+      success: true, 
+      data: newReview,
+      message: 'Review added successfully.' 
+    });
   } catch (err) {
     next(err);
   }
@@ -89,32 +89,41 @@ exports.addReview = async (req, res, next) => {
 exports.updateReview = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { id: reviewId } = req.params; // Assuming review ID is in URL params
+    const { id: reviewId } = req.params;
     const token = req.headers["authorization"]?.split(" ")[1];
     const supabaseWithAuth = createClient(
       process.env.SUPABASE_URL,
       process.env.SUPABASE_ANON_KEY,
       { global: { headers: { Authorization: `Bearer ${token}` } } }
     );
-    const { productId, rating, comment, images, videos } = req.body;
+    const { rating, comment, media_urls } = req.body;
 
-    // Normalize optional media arrays
+    // Validate required fields
+    if (!rating) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'rating is required.' 
+      });
+    }
+
+    // Normalize and validate media_urls (max 5 items)
     const toArray = (value) =>
       Array.isArray(value)
         ? value
         : (typeof value === 'string' && value.trim().length > 0)
         ? [value]
         : [];
+    
     const sanitizeUrls = (arr) =>
       arr
         .filter((u) => typeof u === 'string')
         .map((u) => u.trim())
         .filter((u) => u.length > 0 && /^https?:\/\//i.test(u))
-        .slice(0, 10); // Limit to 10 of each to avoid abuse
-    const imageUrls = sanitizeUrls(toArray(images));
-    const videoUrls = sanitizeUrls(toArray(videos));
+        .slice(0, 5); // Limit to 5 media items max
 
-    // Step 1: Check if the review exists and belongs to the user
+    const mediaUrls = sanitizeUrls(toArray(media_urls));
+
+    // Step 1: Check if review exists and belongs to user
     const { data: existingReview, error: fetchError } = await supabaseWithAuth
       .from('reviews')
       .select('product_id')
@@ -124,31 +133,17 @@ exports.updateReview = async (req, res, next) => {
 
     if (fetchError) {
       if (fetchError.code === 'PGRST116') {
-        return res.status(404).json({ success: false, message: 'Review not found or does not belong to you.' });
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Review not found or does not belong to you.' 
+        });
       }
       throw fetchError;
     }
 
     const reviewProductId = existingReview.product_id;
 
-    // Step 2: First, get all order IDs for the current user.
-    const { data: orders, error: ordersError } = await supabaseWithAuth
-      .from('orders')
-      .select('id')
-      .eq('user_id', userId);
-
-    if (ordersError) throw ordersError;
-
-    // If the user has no orders, they can't have purchased the product.
-    if (!orders || orders.length === 0) {
-      return res.status(403).json({ success: false, message: 'You can only review products you have purchased.' });
-    }
-
-    // Create an array of just the IDs from the orders result.
-    const orderIds = orders.map(order => order.id);
-
-    // Step 3: Now, check if any of those orders contain the specific product.
-    // Use the `count` returned by Supabase when using { count: 'exact' }.
+    // Step 2: Verify user has purchased the product
     const { count, error: purchaseError } = await supabaseWithAuth
       .from('order_items')
       .select('*, orders!inner(*)', { count: 'exact', head: true })
@@ -157,17 +152,18 @@ exports.updateReview = async (req, res, next) => {
 
     if (purchaseError) throw purchaseError;
 
-    // If the count is 0, the user has not purchased this item.
     if (count === 0) {
-      return res.status(403).json({ success: false, message: 'You can only review products you have purchased.' });
+      return res.status(403).json({ 
+        success: false, 
+        message: 'You can only review products you have purchased.' 
+      });
     }
 
-    // Update the review
+    // Step 3: Update the review with new media_urls field
     const updateData = {
       rating,
-      comment,
-      ...(imageUrls.length ? { images: imageUrls } : {}),
-      ...(videoUrls.length ? { videos: videoUrls } : {}),
+      comment: comment || null,
+      ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : { media_urls: [] }), // Clear if empty
     };
 
     const { data: updatedReview, error: updateError } = await supabaseWithAuth
@@ -180,7 +176,11 @@ exports.updateReview = async (req, res, next) => {
 
     if (updateError) throw updateError;
 
-    res.status(200).json({ success: true, data: updatedReview });
+    res.status(200).json({ 
+      success: true, 
+      data: updatedReview,
+      message: 'Review updated successfully.' 
+    });
   } catch (err) {
     next(err);
   }

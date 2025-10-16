@@ -2329,6 +2329,91 @@ paths:
           description: Order not found or does not belong to user
         '500':
           description: Internal Server Error
+  /orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel an order (User)
+      description: |
+        Allows a logged-in user to cancel their own order if status is 'pending' or 'processing'.
+        Automatically restores product stock and marks payment for refund if applicable.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Order ID to cancel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancellation_reason:
+                  type: string
+                  maxLength: 500
+                  description: Optional reason for cancellation
+                  example: "Found a better price elsewhere"
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Order cancelled successfully. Stock has been restored."
+                  data:
+                    type: object
+                    properties:
+                      orderId:
+                        type: integer
+                        example: 12345
+                      status:
+                        type: string
+                        example: "cancelled"
+                      refundStatus:
+                        type: string
+                        nullable: true
+                        example: "Refund will be processed within 5-7 business days"
+        '400':
+          description: Cannot cancel order (wrong status)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: 'Cannot cancel order with status "delivered". Only pending or processing orders can be cancelled.'
+                  currentStatus:
+                    type: string
+                    example: "delivered"
+        '404':
+          description: Order not found or not owned by user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Order not found or does not belong to you."
+        '401':
+          description: Unauthorized (no valid token)
   /reviews:
     post:
       tags:

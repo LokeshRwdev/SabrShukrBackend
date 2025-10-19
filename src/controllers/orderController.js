@@ -35,7 +35,7 @@ exports.placeOrder = async (req, res, next) => {
     // 2. Validate stock & prepare items
     let totalAmount = 0;
     const orderItemsToInsert = [];
-    const stockDecrements = []; // { id, quantity }
+    const stockDecrements = [];
 
     for (const item of cartItems) {
       const variant = item.product_variants;
@@ -45,7 +45,7 @@ exports.placeOrder = async (req, res, next) => {
       if (variant.stock_quantity < item.quantity) {
         return res.status(400).json({
           success: false,
-            message: `Not enough stock for ${variant.products?.name || 'Product'} (Variant ID: ${variant.id}). Available: ${variant.stock_quantity}, Requested: ${item.quantity}`
+          message: `Not enough stock for ${variant.products?.name || 'Product'} (Variant ID: ${variant.id}). Available: ${variant.stock_quantity}, Requested: ${item.quantity}`
         });
       }
       totalAmount += variant.price * item.quantity;
@@ -72,24 +72,35 @@ exports.placeOrder = async (req, res, next) => {
       throw addressError;
     }
 
-    // 4. Discount / gift wrap
+    // 4. Calculate discount
     let computedDiscount = 0;
     if (typeof clientDiscountAmount === 'number') computedDiscount = clientDiscountAmount;
     if (!Number.isFinite(computedDiscount) || computedDiscount < 0) computedDiscount = 0;
     if (computedDiscount > totalAmount) computedDiscount = totalAmount;
+
+    // 5. Calculate subtotal after discount (for delivery charge calculation)
+    const subtotalAfterDiscount = totalAmount - computedDiscount;
+
+    // 6. NEW: Calculate delivery charge
+    const DELIVERY_CHARGE_THRESHOLD = 499;
+    const DELIVERY_CHARGE = 50;
+    const deliveryCharge = subtotalAfterDiscount < DELIVERY_CHARGE_THRESHOLD ? DELIVERY_CHARGE : 0;
+
+    // 7. Calculate gift wrap fee
     const GIFT_WRAP_FEE = 89;
     const isGiftWrapped = Boolean(applyGiftWrap);
     const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
-    const finalAmount = totalAmount - computedDiscount + giftWrapFee;
 
-    // 5. Atomically decrement stock (service role) with optimistic check
-    // We do one-by-one with conditional WHERE to prevent negative stock.
+    // 8. Calculate final amount
+    const finalAmount = subtotalAfterDiscount + deliveryCharge + giftWrapFee;
+
+    // 9. Atomically decrement stock (service role) with optimistic check
     for (const dec of stockDecrements) {
       const { data: updatedRows, error: stockError } = await supabaseService
         .from('product_variants')
-        .update({ updated_at: new Date().toISOString(), /* optional */ })
+        .update({ updated_at: new Date().toISOString() })
         .eq('id', dec.id)
-        .gte('stock_quantity', dec.quantity) // ensure enough stock
+        .gte('stock_quantity', dec.quantity)
         .select('id, stock_quantity');
       if (stockError) {
         return res.status(400).json({ success: false, message: `Failed updating stock for variant ${dec.id}: ${stockError.message}` });
@@ -97,22 +108,20 @@ exports.placeOrder = async (req, res, next) => {
       if (!updatedRows || updatedRows.length === 0) {
         return res.status(400).json({ success: false, message: `Insufficient stock during finalization for variant ${dec.id}.` });
       }
-      // Perform arithmetic locally after ensuring row matched
       const currentStock = updatedRows[0].stock_quantity;
       const newStock = currentStock - dec.quantity;
-      // Second step: set the decremented value (to avoid race with simultaneous updates we re-check)
       const { data: finalUpdate, error: secondError } = await supabaseService
         .from('product_variants')
         .update({ stock_quantity: newStock })
         .eq('id', dec.id)
-        .eq('stock_quantity', currentStock) // ensure unchanged since last read
+        .eq('stock_quantity', currentStock)
         .select('id');
       if (secondError || !finalUpdate || finalUpdate.length === 0) {
         return res.status(409).json({ success: false, message: `Stock conflict for variant ${dec.id}, please retry.` });
       }
     }
 
-    // 6. Create order
+    // 10. Create order with delivery charge
     const { data: newOrder, error: orderError } = await supabaseWithAuth
       .from('orders')
       .insert({
@@ -120,6 +129,7 @@ exports.placeOrder = async (req, res, next) => {
         shipping_address: shippingAddress,
         total_amount: totalAmount,
         discount_amount: computedDiscount,
+        delivery_charge: deliveryCharge, // NEW: Add delivery charge
         gift_wrap_fee: giftWrapFee,
         is_gift_wrapped: isGiftWrapped,
         gift_recipient_name: giftDetails?.recipientName ?? null,
@@ -134,21 +144,21 @@ exports.placeOrder = async (req, res, next) => {
       .single();
     if (orderError) throw orderError;
 
-    // 7. Insert order_items
+    // 11. Insert order_items
     const orderItemsWithOrderId = orderItemsToInsert.map(i => ({ ...i, order_id: newOrder.id }));
     const { error: orderItemsError } = await supabaseWithAuth
       .from('order_items')
       .insert(orderItemsWithOrderId);
     if (orderItemsError) throw orderItemsError;
 
-    // 8. Clear cart
+    // 12. Clear cart
     const { error: deleteCartError } = await supabaseWithAuth
       .from('cart_items')
       .delete()
       .eq('user_id', userId);
     if (deleteCartError) throw deleteCartError;
 
-    // 9. Affiliate (unchanged)
+    // 13. Affiliate (unchanged)
     const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode;
     if (affiliateTrackingCode) {
       const { data: affiliateData } = await supabaseWithAuth
@@ -161,9 +171,19 @@ exports.placeOrder = async (req, res, next) => {
       }
     }
 
-    return res.status(201).json({ success: true, message: 'Order placed successfully', order: newOrder });
+    return res.status(201).json({ 
+      success: true, 
+      message: 'Order placed successfully', 
+      order: newOrder,
+      pricing_breakdown: { // NEW: Return pricing breakdown for frontend
+        subtotal: totalAmount,
+        discount: computedDiscount,
+        delivery_charge: deliveryCharge,
+        gift_wrap_fee: giftWrapFee,
+        final_amount: finalAmount
+      }
+    });
   } catch (err) {
-    // (Optional) TODO: consider compensating actions if partial stock decrements occurred before failure.
     next(err);
   }
 };

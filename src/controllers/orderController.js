@@ -135,7 +135,7 @@ exports.placeOrder = async (req, res, next) => {
         gift_recipient_name: giftDetails?.recipientName ?? null,
         gift_message: giftDetails?.message ?? null,
         gift_sender_name: giftDetails?.senderName ?? null,
-        final_amount: finalAmount,
+        final_amount: Math.ceil(finalAmount),
         status: 'pending',
         payment_status: paymentMethod === 'COD' ? 'completed' : 'pending',
         payment_method: paymentMethod
@@ -180,7 +180,7 @@ exports.placeOrder = async (req, res, next) => {
         discount: computedDiscount,
         delivery_charge: deliveryCharge,
         gift_wrap_fee: giftWrapFee,
-        final_amount: finalAmount
+        final_amount: Math.ceil(finalAmount)
       }
     });
   } catch (err) {

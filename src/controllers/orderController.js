@@ -82,9 +82,9 @@ exports.placeOrder = async (req, res, next) => {
     const subtotalAfterDiscount = totalAmount - computedDiscount;
 
     // 6. NEW: Calculate delivery charge
-    const DELIVERY_CHARGE_THRESHOLD = 499;
-    const DELIVERY_CHARGE = 50;
-    const deliveryCharge = subtotalAfterDiscount < DELIVERY_CHARGE_THRESHOLD ? DELIVERY_CHARGE : 0;
+    // const DELIVERY_CHARGE_THRESHOLD = 499;
+    // const DELIVERY_CHARGE = 50;
+    // const deliveryCharge = subtotalAfterDiscount < DELIVERY_CHARGE_THRESHOLD ? DELIVERY_CHARGE : 0;
 
     // 7. Calculate gift wrap fee
     const GIFT_WRAP_FEE = 89;
@@ -92,7 +92,7 @@ exports.placeOrder = async (req, res, next) => {
     const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
 
     // 8. Calculate final amount
-    const finalAmount = subtotalAfterDiscount + deliveryCharge + giftWrapFee;
+    const finalAmount = subtotalAfterDiscount  + giftWrapFee;
 
     // 9. Atomically decrement stock (service role) with optimistic check
     for (const dec of stockDecrements) {
@@ -129,7 +129,7 @@ exports.placeOrder = async (req, res, next) => {
         shipping_address: shippingAddress,
         total_amount: totalAmount,
         discount_amount: computedDiscount,
-        delivery_charge: deliveryCharge, // NEW: Add delivery charge
+        // delivery_charge: deliveryCharge, 
         gift_wrap_fee: giftWrapFee,
         is_gift_wrapped: isGiftWrapped,
         gift_recipient_name: giftDetails?.recipientName ?? null,
@@ -178,7 +178,7 @@ exports.placeOrder = async (req, res, next) => {
       pricing_breakdown: { // NEW: Return pricing breakdown for frontend
         subtotal: totalAmount,
         discount: computedDiscount,
-        delivery_charge: deliveryCharge,
+        // delivery_charge: deliveryCharge,
         gift_wrap_fee: giftWrapFee,
         final_amount: Math.ceil(finalAmount)
       }

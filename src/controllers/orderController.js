@@ -11,7 +11,14 @@ const supabaseService = createClient(
 
 
 exports.placeOrder = async (req, res, next) => {
-  const { shippingAddressId, paymentMethod, discountAmount: clientDiscountAmount, applyGiftWrap, giftDetails } = req.body;
+  const { 
+    shippingAddressId, 
+    paymentMethod, 
+    discountAmount: clientDiscountAmount, 
+    applyGiftWrap, 
+    giftDetails,
+    shippingCharges // Accept shipping charges from frontend
+  } = req.body;
   const userId = req.user.id;
   const token = req.headers["authorization"]?.split(" ")[1];
   const supabaseWithAuth = createClient(
@@ -78,21 +85,22 @@ exports.placeOrder = async (req, res, next) => {
     if (!Number.isFinite(computedDiscount) || computedDiscount < 0) computedDiscount = 0;
     if (computedDiscount > totalAmount) computedDiscount = totalAmount;
 
-    // 5. Calculate subtotal after discount (for delivery charge calculation)
+    // 5. Calculate subtotal after discount
     const subtotalAfterDiscount = totalAmount - computedDiscount;
 
-    // 6. NEW: Calculate delivery charge
-    // const DELIVERY_CHARGE_THRESHOLD = 499;
-    // const DELIVERY_CHARGE = 50;
-    // const deliveryCharge = subtotalAfterDiscount < DELIVERY_CHARGE_THRESHOLD ? DELIVERY_CHARGE : 0;
+    // 6. Validate and process shipping charges from frontend
+    let validatedShippingCharges = 0;
+    if (typeof shippingCharges === 'number' && shippingCharges >= 0) {
+      validatedShippingCharges = shippingCharges;
+    }
 
     // 7. Calculate gift wrap fee
     const GIFT_WRAP_FEE = 89;
     const isGiftWrapped = Boolean(applyGiftWrap);
     const giftWrapFee = isGiftWrapped ? GIFT_WRAP_FEE : 0;
 
-    // 8. Calculate final amount
-    const finalAmount = subtotalAfterDiscount  + giftWrapFee;
+    // 8. Calculate final amount with shipping charges
+    const finalAmount = subtotalAfterDiscount + validatedShippingCharges + giftWrapFee;
 
     // 9. Atomically decrement stock (service role) with optimistic check
     for (const dec of stockDecrements) {
@@ -121,7 +129,7 @@ exports.placeOrder = async (req, res, next) => {
       }
     }
 
-    // 10. Create order with delivery charge
+    // 10. Create order with shipping charges
     const { data: newOrder, error: orderError } = await supabaseWithAuth
       .from('orders')
       .insert({
@@ -129,7 +137,7 @@ exports.placeOrder = async (req, res, next) => {
         shipping_address: shippingAddress,
         total_amount: totalAmount,
         discount_amount: computedDiscount,
-        // delivery_charge: deliveryCharge, 
+        delivery_charge: validatedShippingCharges, // Store as delivery_charge in DB
         gift_wrap_fee: giftWrapFee,
         is_gift_wrapped: isGiftWrapped,
         gift_recipient_name: giftDetails?.recipientName ?? null,
@@ -175,10 +183,10 @@ exports.placeOrder = async (req, res, next) => {
       success: true, 
       message: 'Order placed successfully', 
       order: newOrder,
-      pricing_breakdown: { // NEW: Return pricing breakdown for frontend
+      pricing_breakdown: {
         subtotal: totalAmount,
         discount: computedDiscount,
-        // delivery_charge: deliveryCharge,
+        shipping_charges: validatedShippingCharges, // Consistent naming in response
         gift_wrap_fee: giftWrapFee,
         final_amount: Math.ceil(finalAmount)
       }

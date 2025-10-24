@@ -20,13 +20,13 @@ exports.getHomepage = async (req, res, next) => {
     // Fetch active "watch and shop" videos
     const { data: watchAndShopVideos, error: videosError } = await supabase
       .from('watch_and_shop_videos')
-      // The .select() query is updated to follow the new nested relationship
       .select(`
         *,
         product_variants (
           id,
           price,
-          attributes,
+          discount_type,
+          discount_value,
           products (
             name,
             slug,

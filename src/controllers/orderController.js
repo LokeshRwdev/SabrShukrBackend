@@ -159,12 +159,14 @@ exports.placeOrder = async (req, res, next) => {
       .insert(orderItemsWithOrderId);
     if (orderItemsError) throw orderItemsError;
 
-    // 12. Clear cart
-    const { error: deleteCartError } = await supabaseWithAuth
-      .from('cart_items')
-      .delete()
-      .eq('user_id', userId);
-    if (deleteCartError) throw deleteCartError;
+    // 12. Clear cart ONLY for COD orders
+    if (paymentMethod === 'COD') {
+      const { error: deleteCartError } = await supabaseWithAuth
+        .from('cart_items')
+        .delete()
+        .eq('user_id', userId);
+      if (deleteCartError) throw deleteCartError;
+    }
 
     // 13. Affiliate (unchanged)
     const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode;
@@ -186,7 +188,7 @@ exports.placeOrder = async (req, res, next) => {
       pricing_breakdown: {
         subtotal: totalAmount,
         discount: computedDiscount,
-        shipping_charges: validatedShippingCharges, // Consistent naming in response
+        shipping_charges: validatedShippingCharges,
         gift_wrap_fee: giftWrapFee,
         final_amount: Math.ceil(finalAmount)
       }

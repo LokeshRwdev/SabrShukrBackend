@@ -165,13 +165,13 @@ exports.verifyPayment = async (req, res, next) => {
     const rpSignature = signature;
     const internalOrderId = orderId;
 
-        if (!rpOrderId || !rpPaymentId || !rpSignature || !internalOrderId) {
+    if (!rpOrderId || !rpPaymentId || !rpSignature || !internalOrderId) {
       return res
         .status(400)
         .json({ success: false, message: "Missing required parameters." });
     }
 
-        const secret = process.env.RAZORPAY_KEY_SECRET;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(`${rpOrderId}|${rpPaymentId}`);
     const generatedSignature = hmac.digest('hex');
@@ -182,10 +182,10 @@ exports.verifyPayment = async (req, res, next) => {
         .json({ success: false, message: "Invalid signature." });
     }
 
-    // Fetch order amount for record keeping
-        const { data: order, error: orderError } = await supabaseServiceRole
+    // Fetch order details including user_id
+    const { data: order, error: orderError } = await supabaseServiceRole
       .from('orders')
-      .select('final_amount')
+      .select('final_amount, user_id')
       .eq('id', internalOrderId)
       .single();
 
@@ -199,13 +199,13 @@ exports.verifyPayment = async (req, res, next) => {
     }
 
     // Update order status
-        await supabaseServiceRole
+    await supabaseServiceRole
       .from('orders')
       .update({ payment_status: 'paid', status: 'processing' })
       .eq('id', internalOrderId);
 
     // Record payment details
-        await supabaseServiceRole.from('payments').insert({
+    await supabaseServiceRole.from('payments').insert({
       order_id: internalOrderId,
       payment_gateway_transaction_id: rpPaymentId,
       amount: order.final_amount,
@@ -217,6 +217,12 @@ exports.verifyPayment = async (req, res, next) => {
         razorpay_signature: rpSignature,
       },
     });
+
+    // Clear cart after successful payment verification
+    await supabaseServiceRole
+      .from('cart_items')
+      .delete()
+      .eq('user_id', order.user_id);
 
     return res.json({ success: true, verified: true });
   } catch (err) {

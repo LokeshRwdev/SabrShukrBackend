@@ -4,6 +4,7 @@ const router = express.Router();
 const authMiddleware = require('../middlewares/auth');
 const adminAuthMiddleware = require('../middlewares/adminAuth');
 const adminController = require('../controllers/adminController');
+const adminStoryController = require('../controllers/adminStoryController');
 
 // Apply authentication and admin authorization middleware to all admin routes
 router.use(authMiddleware);
@@ -48,6 +49,13 @@ router.put('/orders/:id/status', adminController.updateOrderStatus);
 router.get('/reviews', adminController.getReviews);
 router.put('/reviews/:id/approve', adminController.approveReview);
 router.delete('/reviews/:id', adminController.deleteReview);
+
+// Story Management
+router.get('/stories', adminStoryController.getStories);
+router.post('/stories', adminStoryController.createBrandStory);
+router.put('/stories/:id/approve', adminStoryController.approveStory);
+router.put('/stories/:id/reject', adminStoryController.rejectStory);
+router.delete('/stories/:id', adminStoryController.deleteStory);
 
 // Product Variant Routes
 router.post('/products/:productId/variants', adminController.createProductVariant);

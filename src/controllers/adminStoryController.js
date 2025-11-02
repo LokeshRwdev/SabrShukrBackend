@@ -2,9 +2,23 @@ const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 
 const MEDIA_TYPES = new Set(["image", "video"]);
 const STATUS_VALUES = new Set(["pending", "approved", "rejected"]);
+const EXPIRY_TYPES = new Set(["auto", "manual"]);
+const TWENTY_FOUR_HOURS_IN_MS = 24 * 60 * 60 * 1000;
 
 const pickFirstDefined = (...values) =>
   values.find((value) => value !== undefined && value !== null);
+
+const resolveExpiryType = (value) => {
+  if (value === undefined || value === null) return "auto";
+  const normalized = String(value).toLowerCase();
+  return EXPIRY_TYPES.has(normalized) ? normalized : null;
+};
+
+const computeExpiresAt = (approvedAt, expiryType) => {
+  if (expiryType === "manual") return null;
+  return new Date(approvedAt.getTime() + TWENTY_FOUR_HOURS_IN_MS).toISOString();
+};
+
 exports.getStories = async (req, res, next) => {
   try {
     const statusParam = req.query.status
@@ -74,9 +88,8 @@ exports.createBrandStory = async (req, res, next) => {
       req.body.media_type
     );
     const caption = pickFirstDefined(req.body.caption, req.body.caption_text);
-    const expiresAt = pickFirstDefined(
-      req.body.expiresAt,
-      req.body.expires_at
+    const expiryType = resolveExpiryType(
+      pickFirstDefined(req.body.expiryType, req.body.expiry_type)
     );
 
     if (!mediaUrl || !mediaType) {
@@ -93,19 +106,16 @@ exports.createBrandStory = async (req, res, next) => {
       });
     }
 
-    let expiresAtValue = null;
-    if (expiresAt) {
-      const expiresDate = new Date(expiresAt);
-      if (Number.isNaN(expiresDate.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: "expiresAt must be a valid ISO date string.",
-        });
-      }
-      expiresAtValue = expiresDate.toISOString();
+    if (!expiryType) {
+      return res.status(400).json({
+        success: false,
+        message: "expiryType must be either 'auto' or 'manual'.",
+      });
     }
 
-    const nowIso = new Date().toISOString();
+    const approvedAtDate = new Date();
+    const nowIso = approvedAtDate.toISOString();
+    const expiresAtValue = computeExpiresAt(approvedAtDate, expiryType);
 
     const { data: story, error } = await supabaseServiceRole
       .from("stories")
@@ -156,6 +166,16 @@ exports.createBrandStory = async (req, res, next) => {
 exports.approveStory = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const expiryType = resolveExpiryType(
+      pickFirstDefined(req.body.expiryType, req.body.expiry_type)
+    );
+
+    if (!expiryType) {
+      return res.status(400).json({
+        success: false,
+        message: "expiryType must be either 'auto' or 'manual'.",
+      });
+    }
 
     const { data: existingStory, error: fetchError } = await supabaseServiceRole
       .from("stories")
@@ -180,13 +200,16 @@ exports.approveStory = async (req, res, next) => {
       });
     }
 
-    const nowIso = new Date().toISOString();
+    const approvedAtDate = new Date();
+    const nowIso = approvedAtDate.toISOString();
+    const expiresAtValue = computeExpiresAt(approvedAtDate, expiryType);
 
     const { data: story, error } = await supabaseServiceRole
       .from("stories")
       .update({
         status: "approved",
         approved_at: nowIso,
+        expires_at: expiresAtValue,
       })
       .eq("id", id)
       .select(

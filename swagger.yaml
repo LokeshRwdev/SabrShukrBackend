@@ -1457,17 +1457,36 @@ components:
         caption:
           type: string
           nullable: true
-        expiresAt:
+        expiryType:
           type: string
-          format: date-time
           nullable: true
-          description: Optional timestamp after which the story should expire.
+          description: >
+            Controls the expiry behaviour. Use `auto` to expire 24 hours after approval (default) or `manual`
+            to keep the story active until it is manually removed.
+          enum:
+            - auto
+            - manual
       example:
         productId: 456
         mediaUrl: https://cdn.example.com/stories/brand-launch.mp4
         mediaType: video
         caption: Celebrating our newest launch
-        expiresAt: 2025-12-31T23:59:59Z
+        expiryType: auto
+
+    AdminStoryApproveRequest:
+      type: object
+      properties:
+        expiryType:
+          type: string
+          nullable: true
+          description: >
+            Controls the expiry behaviour. Use `auto` to expire 24 hours after approval (default) or `manual`
+            to keep the story active until it is manually removed.
+          enum:
+            - auto
+            - manual
+      example:
+        expiryType: manual
 
 tags:
   - name: Auth
@@ -3809,7 +3828,7 @@ paths:
       tags:
         - Admin Stories
       summary: Approve a user story
-      description: Marks a pending user story as approved and records the approval timestamp.
+      description: Marks a pending user story as approved, records the approval timestamp, and applies the requested expiry behaviour.
       security:
         - bearerAuth: []
       parameters:
@@ -3820,6 +3839,12 @@ paths:
             type: string
             format: uuid
           description: Story identifier
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminStoryApproveRequest'
       responses:
         '200':
           description: Story approved

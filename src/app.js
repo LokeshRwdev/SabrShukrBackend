@@ -12,6 +12,7 @@ const allowedOrigins = [
   "http://localhost:8080",
   "https://admin.sabrshukr.store",
   "https://sabrshukr.store",
+  "https://sabrshukr.co",
   "http://localhost:5000",
   "https://sabrshukrbackend.onrender.com",
   "http://localhost:3000",

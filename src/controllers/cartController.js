@@ -1,4 +1,3 @@
-const { createClient } = require("@supabase/supabase-js");
 const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 
 exports.getCart = async (req, res, next) => {

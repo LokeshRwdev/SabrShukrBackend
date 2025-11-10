@@ -75,12 +75,6 @@ exports.loginWithOtp = async (req, res, next) => {
       });
     }
 
-    // DEBUG: Log JWT_SECRET status
-    console.log('🔑 JWT_SECRET in loginWithOtp:', {
-      exists: !!process.env.JWT_SECRET,
-      length: process.env.JWT_SECRET?.length,
-      first10: process.env.JWT_SECRET?.substring(0, 10) + '...'
-    });
 
     // Step 1: Verify OTP with Otify
     const verifyPayload = {

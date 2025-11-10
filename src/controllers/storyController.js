@@ -1,4 +1,3 @@
-const { createClient } = require("@supabase/supabase-js");
 const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 
 const MEDIA_TYPES = new Set(["image", "video"]);

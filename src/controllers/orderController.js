@@ -2,7 +2,6 @@ const { serviceRole: supabaseServiceRole } = require('../utils/supabaseClient');
 const { shiprocketRequest } = require('../utils/shiprocketClient');
 
 const affiliateController = require('./affiliateController');
-const { createClient } = require('@supabase/supabase-js');
 
 
 exports.placeOrder = async (req, res, next) => {
@@ -191,15 +190,8 @@ exports.placeOrder = async (req, res, next) => {
 exports.getOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
-     const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-    
 
-    const { data: orders, error } = await supabase
+    const { data: orders, error } = await supabaseServiceRole
       .from('orders')
       .select(`
         *,
@@ -289,14 +281,8 @@ exports.getOrderById = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
 
-    const { data: order, error } = await supabase
+    const { data: order, error } = await supabaseServiceRole
       .from('orders')
       .select('*, order_items(*, product_variants(*, products(name, slug, product_images(image_url, is_thumbnail))))')
       .eq('id', id)

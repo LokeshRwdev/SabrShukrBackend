@@ -1,5 +1,7 @@
 const supabase = require("../utils/supabaseClient");
 const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
+const jwt = require("jsonwebtoken");
+const axios = require("axios");
 
 exports.register = async (req, res, next) => {
   try {
@@ -65,74 +67,118 @@ exports.socialLogin = async (req, res, next) => {
 exports.loginWithOtp = async (req, res, next) => {
   try {
     const { phone, otp, fullName, email } = req.body;
-    // Supabase expects phone in E.164 format (e.g., +919876543210)
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone,
-      token: otp,
-      type: "sms",
-    });
-    if (error) return next(error);
 
-    // If optional fields are provided, update respective tables
-    try {
-      const userId = data && data.user && data.user.id ? data.user.id : null;
-      if (userId) {
-        // Update auth.users.phone and profiles.phone_number if provided
-        if (phone) {
-          if (
-            supabaseServiceRole &&
-            supabaseServiceRole.auth &&
-            supabaseServiceRole.auth.admin &&
-            typeof supabaseServiceRole.auth.admin.updateUserById === "function"
-          ) {
-            await supabaseServiceRole.auth.admin.updateUserById(userId, {
-              phone,
-            });
-          }
-          await supabaseServiceRole
-            .from("profiles")
-            .upsert(
-              {
-                id: userId,
-                phone_number: String(phone).trim(),
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "id" }
-            );
-        }
-        // Update profiles.full_name if provided
-        if (fullName) {
-          const upsertPayload = {
-            id: userId,
-            full_name: fullName,
-            updated_at: new Date().toISOString(),
-          };
-          await supabaseServiceRole
-            .from("profiles")
-            .upsert(upsertPayload, { onConflict: "id" });
-        }
-
-        // Update auth.users.email if provided
-        if (email) {
-          // Use service role admin API for updating auth users
-          if (
-            supabaseServiceRole &&
-            supabaseServiceRole.auth &&
-            supabaseServiceRole.auth.admin &&
-            typeof supabaseServiceRole.auth.admin.updateUserById === "function"
-          ) {
-            await supabaseServiceRole.auth.admin.updateUserById(userId, {
-              email,
-            });
-          }
-        }
-      }
-    } catch (silentErr) {
-      // Do not fail login if post-login updates fail
-      // Optionally log: console.error('Post-OTP update error', silentErr);
+    if (!phone || !otp) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Phone number and OTP are required" 
+      });
     }
 
-    res.json({ success: true, data });
+    // Step 1: Verify OTP with Otify
+    const verifyPayload = {
+      to: phone,
+      otp: otp
+    };
+
+    const verifyResponse = await axios.post(
+      `${process.env.OTIFY_BASE_URL}/v1/verifyuserotp?api_key=${process.env.OTIFY_API_KEY}`,
+      verifyPayload
+    );
+
+    if (!verifyResponse.data || verifyResponse.data.success === false) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid OTP" 
+      });
+    }
+
+    // Step 2: Find or Create User in profiles table
+    let { data: user, error: queryError } = await supabaseServiceRole
+      .from("profiles")
+      .select("*")
+      .eq("phone_number", phone)
+      .single();
+
+    // If user doesn't exist, create new user (signup)
+    if (queryError && queryError.code === 'PGRST116') {
+      const newUserData = {
+        phone_number: phone,
+        full_name: fullName || null,
+        email: email || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      const { data: newUser, error: insertError } = await supabaseServiceRole
+        .from("profiles")
+        .insert(newUserData)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      user = newUser;
+    } else if (queryError) {
+      throw queryError;
+    } else {
+      // User exists - update optional fields if provided
+      const updates = {};
+      if (fullName) updates.full_name = fullName;
+      if (email) updates.email = email;
+      
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString();
+        const { data: updatedUser, error: updateError } = await supabaseServiceRole
+          .from("profiles")
+          .update(updates)
+          .eq("id", user.id)
+          .select()
+          .single();
+        
+        if (!updateError) user = updatedUser;
+      }
+    }
+
+    // Step 3: Generate Custom JWTs
+    const accessToken = jwt.sign(
+      { sub: user.id, role: 'authenticated' },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { sub: user.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '90d' }
+    );
+
+    // Step 4: Build Supabase-compatible session object
+    const sessionData = {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_in: 2592000, // 30 days in seconds (30 * 24 * 60 * 60)
+      token_type: "bearer",
+      user: {
+        id: user.id,
+        phone: user.phone_number,
+        email: user.email,
+        full_name: user.full_name,
+        profile_picture_url: user.profile_picture_url,
+        role: user.role || 'user',
+        is_blocked: user.is_blocked || false,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }
+    };
+
+    // Step 5: Return response mimicking Supabase format
+    res.json({ 
+      success: true, 
+      data: {
+        session: sessionData,
+        user: sessionData.user
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -141,10 +187,37 @@ exports.loginWithOtp = async (req, res, next) => {
 exports.sendOtp = async (req, res, next) => {
   try {
     const { phone } = req.body;
-    // Supabase will send an OTP to this phone number
-    const { data, error } = await supabase.auth.signInWithOtp({ phone });
-    if (error) return next(error);
-    res.json({ success: true, message: "OTP sent successfully", data });
+    
+    if (!phone) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Phone number is required" 
+      });
+    }
+
+    // Call Otify service to send OTP
+    const otifyPayload = {
+      to: phone,
+      sender_id: process.env.OTIFY_SENDER_ID,
+      template_id: process.env.OTIFY_TEMPLATE_ID
+    };
+
+    const otifyResponse = await axios.post(
+      `${process.env.OTIFY_BASE_URL}/v1/createuserotp?api_key=${process.env.OTIFY_API_KEY}`,
+      otifyPayload
+    );
+
+    if (!otifyResponse.data || otifyResponse.data.success === false) {
+      return res.status(500).json({ 
+        success: false, 
+        message: "Failed to send OTP" 
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "OTP sent successfully"
+    });
   } catch (err) {
     next(err);
   }
@@ -174,20 +247,83 @@ exports.verifyToken = async (req, res, next) => {
 exports.refreshToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body || {};
+    
     if (!refreshToken) {
       return res
         .status(400)
         .json({ success: false, message: "refreshToken is required" });
     }
-    const { data, error } = await supabase.auth.refreshSession({
-      refresh_token: refreshToken,
-    });
-    if (error) {
+
+    // Verify the refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch (error) {
       return res
         .status(401)
         .json({ success: false, message: "Invalid or expired refresh token" });
     }
-    return res.json({ success: true, data });
+
+    // Fetch user from profiles table
+    const { data: user, error } = await supabaseServiceRole
+      .from("profiles")
+      .select("*")
+      .eq("id", decoded.sub)
+      .single();
+
+    if (error || !user) {
+      return res
+        .status(401)
+        .json({ success: false, message: "User not found" });
+    }
+
+    // Check if user is blocked
+    if (user.is_blocked) {
+      return res
+        .status(403)
+        .json({ success: false, message: "User account is blocked" });
+    }
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      { sub: user.id, role: user.role || 'authenticated' },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    // Generate new refresh token
+    const newRefreshToken = jwt.sign(
+      { sub: user.id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: '90d' }
+    );
+
+    // Build session object
+    const sessionData = {
+      access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+      expires_in: 2592000, // 30 days in seconds (30 * 24 * 60 * 60)
+      token_type: "bearer",
+      user: {
+        id: user.id,
+        phone: user.phone_number,
+        email: user.email,
+        full_name: user.full_name,
+        profile_picture_url: user.profile_picture_url,
+        role: user.role || 'user',
+        is_blocked: user.is_blocked || false,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }
+    };
+
+    return res.json({ 
+      success: true, 
+      data: {
+        session: sessionData,
+        user: sessionData.user
+      }
+    });
   } catch (err) {
     next(err);
   }

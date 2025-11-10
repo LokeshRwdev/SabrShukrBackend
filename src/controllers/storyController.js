@@ -72,7 +72,7 @@ exports.submitStory = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseWithAuth = buildSupabaseClientWithAuth(token);
+    const supabaseServiceRole = buildSupabaseClientWithAuth(token);
 
     const productId = pickFirstDefined(req.body.productId, req.body.product_id);
     const mediaUrl = pickFirstDefined(req.body.mediaUrl, req.body.media_url);
@@ -94,7 +94,7 @@ exports.submitStory = async (req, res, next) => {
     }
 
     const hasPurchased = await verifyUserPurchase(
-      supabaseWithAuth,
+      supabaseServiceRole,
       userId,
       productId
     );
@@ -106,7 +106,7 @@ exports.submitStory = async (req, res, next) => {
       });
     }
 
-    const { data: insertedStory, error: insertError } = await supabaseWithAuth
+    const { data: insertedStory, error: insertError } = await supabaseServiceRole
       .from("stories")
       .insert({
         user_id: userId,
@@ -136,9 +136,9 @@ exports.getMyStories = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseWithAuth = buildSupabaseClientWithAuth(token);
+    const supabaseServiceRole = buildSupabaseClientWithAuth(token);
 
-    const { data: stories, error } = await supabaseWithAuth
+    const { data: stories, error } = await supabaseServiceRole
       .from("stories")
       .select(
         `

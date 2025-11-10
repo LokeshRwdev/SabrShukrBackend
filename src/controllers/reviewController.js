@@ -4,12 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 exports.addReview = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseWithAuth = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
+    
     const { productId, rating, comment, media_urls } = req.body;
 
     // Validate required fields
@@ -38,7 +33,7 @@ exports.addReview = async (req, res, next) => {
     const mediaUrls = sanitizeUrls(toArray(media_urls));
 
     // Step 1: Check if user has purchased this product
-    const { count, error: purchaseError } = await supabaseWithAuth
+    const { count, error: purchaseError } = await supabaseServiceRole
       .from('order_items')
       .select('*, orders!inner(*)', { count: 'exact', head: true })
       .eq('product_id', productId)
@@ -54,7 +49,7 @@ exports.addReview = async (req, res, next) => {
     }
 
     // Step 2: Insert the review with new media_urls field
-    const { data: newReview, error: reviewError } = await supabaseWithAuth
+    const { data: newReview, error: reviewError } = await supabaseServiceRole
       .from('reviews')
       .insert({
         user_id: userId,
@@ -90,12 +85,7 @@ exports.updateReview = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id: reviewId } = req.params;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseWithAuth = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
+    
     const { rating, comment, media_urls } = req.body;
 
     // Validate required fields
@@ -124,7 +114,7 @@ exports.updateReview = async (req, res, next) => {
     const mediaUrls = sanitizeUrls(toArray(media_urls));
 
     // Step 1: Check if review exists and belongs to user
-    const { data: existingReview, error: fetchError } = await supabaseWithAuth
+    const { data: existingReview, error: fetchError } = await supabaseServiceRole
       .from('reviews')
       .select('product_id')
       .eq('id', reviewId)
@@ -144,7 +134,7 @@ exports.updateReview = async (req, res, next) => {
     const reviewProductId = existingReview.product_id;
 
     // Step 2: Verify user has purchased the product
-    const { count, error: purchaseError } = await supabaseWithAuth
+    const { count, error: purchaseError } = await supabaseServiceRole
       .from('order_items')
       .select('*, orders!inner(*)', { count: 'exact', head: true })
       .eq('product_id', reviewProductId)
@@ -166,7 +156,7 @@ exports.updateReview = async (req, res, next) => {
       ...(mediaUrls.length > 0 ? { media_urls: mediaUrls } : { media_urls: [] }), // Clear if empty
     };
 
-    const { data: updatedReview, error: updateError } = await supabaseWithAuth
+    const { data: updatedReview, error: updateError } = await supabaseServiceRole
       .from('reviews')
       .update(updateData)
       .eq('id', reviewId)

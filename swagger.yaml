@@ -44,6 +44,42 @@ components:
       example:
         id: 1
         name: "Premium Yoga Mat"
+  /cart/merge:
+    post:
+      tags:
+        - Cart
+      summary: Merge a guest cart into the authenticated user's cart
+      description: >
+        Accepts the full guest cart in a single request and atomically merges it with
+        the user's existing cart, summing quantities for duplicate variants.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CartMergeRequest'
+      responses:
+        '200':
+          description: Cart merged successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Cart merged successfully.
+        '400':
+          description: Invalid cart data provided
+        '401':
+          description: Unauthorized
+        '500':
+          description: Could not merge cart due to server error
         slug: "premium-yoga-mat"
         description: "A high-quality yoga mat for all levels."
         brand: "ZenFlow"
@@ -1324,6 +1360,42 @@ components:
         format: int64
       description: An array of product IDs wishlisted by the user.
       example: [101, 205, 312]
+
+    CartMergeItem:
+      type: object
+      description: Guest cart line item supplied for merge.
+      properties:
+        variantId:
+          type: integer
+          format: int64
+          description: Identifier of the product variant stored in the guest cart.
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantity selected for that variant while browsing anonymously.
+      required:
+        - variantId
+        - quantity
+      example:
+        variantId: 101
+        quantity: 2
+
+    CartMergeRequest:
+      type: object
+      required:
+        - guestCart
+      properties:
+        guestCart:
+          type: array
+          description: Items collected while the user was browsing anonymously.
+          items:
+            $ref: '#/components/schemas/CartMergeItem'
+      example:
+        guestCart:
+          - variantId: 101
+            quantity: 1
+          - variantId: 102
+            quantity: 2
 
     StoryProfile:
       type: object

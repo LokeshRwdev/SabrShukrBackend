@@ -75,6 +75,13 @@ exports.loginWithOtp = async (req, res, next) => {
       });
     }
 
+    // DEBUG: Log JWT_SECRET status
+    console.log('🔑 JWT_SECRET in loginWithOtp:', {
+      exists: !!process.env.JWT_SECRET,
+      length: process.env.JWT_SECRET?.length,
+      first10: process.env.JWT_SECRET?.substring(0, 10) + '...'
+    });
+
     // Step 1: Verify OTP with Otify
     const verifyPayload = {
       to: phone,
@@ -141,7 +148,13 @@ exports.loginWithOtp = async (req, res, next) => {
 
     // Step 3: Generate Custom JWTs
     const accessToken = jwt.sign(
-      { sub: user.id, role: 'authenticated' },
+      { 
+        sub: user.id, 
+        role: 'authenticated',
+        email: user.email,
+        phone: user.phone_number,
+        full_name: user.full_name
+      },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );

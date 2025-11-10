@@ -1,13 +1,8 @@
-const { supabase } = require('../utils/supabaseClient');
-const { shiprocketRequest } = require('../utils/shiprocketClient'); // add this import
+const { serviceRole: supabaseServiceRole } = require('../utils/supabaseClient');
+const { shiprocketRequest } = require('../utils/shiprocketClient');
 
-const affiliateController = require('./affiliateController'); // Import affiliate controller
+const affiliateController = require('./affiliateController');
 const { createClient } = require('@supabase/supabase-js');
-// Service role client (bypasses RLS for privileged ops like stock updates). NEVER expose this key to clients.
-const supabaseService = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 
 exports.placeOrder = async (req, res, next) => {
@@ -20,16 +15,11 @@ exports.placeOrder = async (req, res, next) => {
     shippingCharges // Accept shipping charges from frontend
   } = req.body;
   const userId = req.user.id;
-  const token = req.headers["authorization"]?.split(" ")[1];
-  const supabaseWithAuth = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
+  
 
   try {
     // 1. Get user's cart items with variant details
-    const { data: cartItems, error: cartError } = await supabaseWithAuth
+    const { data: cartItems, error: cartError } = await supabaseServiceRole
       .from('cart_items')
       .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))')
       .eq('user_id', userId);
@@ -66,7 +56,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // 3. Snapshot shipping address
-    const { data: shippingAddress, error: addressError } = await supabaseWithAuth
+    const { data: shippingAddress, error: addressError } = await supabaseServiceRole
       .from('addresses')
       .select('*')
       .eq('id', shippingAddressId)
@@ -104,7 +94,7 @@ exports.placeOrder = async (req, res, next) => {
 
     // 9. Atomically decrement stock (service role) with optimistic check
     for (const dec of stockDecrements) {
-      const { data: updatedRows, error: stockError } = await supabaseService
+      const { data: updatedRows, error: stockError } = await supabaseServiceRole
         .from('product_variants')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', dec.id)
@@ -118,7 +108,7 @@ exports.placeOrder = async (req, res, next) => {
       }
       const currentStock = updatedRows[0].stock_quantity;
       const newStock = currentStock - dec.quantity;
-      const { data: finalUpdate, error: secondError } = await supabaseService
+      const { data: finalUpdate, error: secondError } = await supabaseServiceRole
         .from('product_variants')
         .update({ stock_quantity: newStock })
         .eq('id', dec.id)
@@ -130,7 +120,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // 10. Create order with shipping charges
-    const { data: newOrder, error: orderError } = await supabaseWithAuth
+    const { data: newOrder, error: orderError } = await supabaseServiceRole
       .from('orders')
       .insert({
         user_id: userId,
@@ -154,14 +144,14 @@ exports.placeOrder = async (req, res, next) => {
 
     // 11. Insert order_items
     const orderItemsWithOrderId = orderItemsToInsert.map(i => ({ ...i, order_id: newOrder.id }));
-    const { error: orderItemsError } = await supabaseWithAuth
+    const { error: orderItemsError } = await supabaseServiceRole
       .from('order_items')
       .insert(orderItemsWithOrderId);
     if (orderItemsError) throw orderItemsError;
 
     // 12. Clear cart ONLY for COD orders
     if (paymentMethod === 'COD') {
-      const { error: deleteCartError } = await supabaseWithAuth
+      const { error: deleteCartError } = await supabaseServiceRole
         .from('cart_items')
         .delete()
         .eq('user_id', userId);
@@ -171,7 +161,7 @@ exports.placeOrder = async (req, res, next) => {
     // 13. Affiliate (unchanged)
     const affiliateTrackingCode = req.session?.affiliateTrackingCode || req.cookies?.affiliateTrackingCode;
     if (affiliateTrackingCode) {
-      const { data: affiliateData } = await supabaseWithAuth
+      const { data: affiliateData } = await supabaseServiceRole
         .from('affiliates')
         .select('id')
         .eq('tracking_code', affiliateTrackingCode)
@@ -334,23 +324,8 @@ exports.cancelOrder = async (req, res, next) => {
     const { id: orderId } = req.params;
     const { cancellation_reason } = req.body;
 
-    // Client 1: Acts AS THE USER (for verification)
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseWithAuth = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
-
-    // Client 2: Acts AS THE SYSTEM/ADMIN (for privileged actions)
-    const supabaseService = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    // 1. Fetch the order to verify ownership (using the USER client)
-    const { data: order, error: fetchError } = await supabaseWithAuth
+    // 1. Fetch the order to verify ownership
+    const { data: order, error: fetchError } = await supabaseServiceRole
       .from('orders')
       .select('id, status, payment_status')
       .eq('id', orderId)
@@ -369,8 +344,8 @@ exports.cancelOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: `Cannot cancel an order with status "${order.status}".` });
     }
 
-    // 3. Restore stock (using the SERVICE client)
-    const { error: stockError } = await supabaseService.rpc('restore_stock_from_order', {
+    // 3. Restore stock
+    const { error: stockError } = await supabaseServiceRole.rpc('restore_stock_from_order', {
       target_order_id: orderId
     });
 
@@ -389,18 +364,12 @@ exports.cancelOrder = async (req, res, next) => {
       updatePayload.payment_status = 'refund_pending';
     }
 
-    // --- START OF FIX ---
-    // Use the SERVICE client for the final update to bypass RLS issues.
-    // This is safe because we have already verified ownership in Step 1.
-    const { data: updatedOrder, error: updateError } = await supabaseService
+    const { data: updatedOrder, error: updateError } = await supabaseServiceRole
       .from('orders')
       .update(updatePayload)
       .eq('id', orderId)
-      // We don't need the .eq('user_id') here because the service role has full access,
-      // but keeping it doesn't hurt.
       .select()
       .single();
-    // --- END OF FIX ---
 
     if (updateError) throw updateError;
 
@@ -413,5 +382,5 @@ exports.cancelOrder = async (req, res, next) => {
 
   } catch (err) {
     next(err);
-s  }
+  }
 };

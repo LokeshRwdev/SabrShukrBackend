@@ -1,7 +1,7 @@
 // Notification Controller
-const supabase = require("../utils/supabaseClient");
+const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 const { sendEmail } = require("../utils/bervo");
-const jwt = require("jsonwebtoken"); // <-- add
+const jwt = require("jsonwebtoken");
 
 function extractEmailFromAuth(req) {
   try {
@@ -9,15 +9,16 @@ function extractEmailFromAuth(req) {
     if (!header || !header.startsWith("Bearer ")) return null;
     const token = header.slice(7);
 
-    // Prefer verifying with SUPABASE_JWT_SECRET if available
-    if (process.env.SUPABASE_JWT_SECRET) {
-      const payload = jwt.verify(token, process.env.SUPABASE_JWT_SECRET);
-      return payload?.email || payload?.user_metadata?.email || null;
+    // Verify with our custom JWT_SECRET
+    if (process.env.JWT_SECRET) {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      return payload?.email || null;
     }
-    // Fallback: decode without verify (still fine for non-sensitive use)
+    // Fallback: decode without verify
     const decoded = jwt.decode(token);
-    return decoded?.email || decoded?.user_metadata?.email || null;
-  } catch {
+    return decoded?.email || null;
+  } catch (error) {
+    console.error('Error extracting email from auth token:', error.message);
     return null;
   }
 }
@@ -28,7 +29,7 @@ exports.getNotificationsByUser = async (req, res, next) => {
     const { userId } = req.params;
     // RLS policies on the 'notifications' table should ensure users only see their own notifications
     // Admins will see all notifications due to their RLS policy.
-    const { data: notifications, error } = await supabase
+    const { data: notifications, error } = await supabaseServiceRole
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
@@ -52,7 +53,7 @@ exports.createNotification = async (req, res, next) => {
 
     // Use service role client if inserting for a user different from the current authenticated user
     // or if the RLS policy for insert prevents direct user inserts.
-    const { data, error } = await supabase.serviceRole
+    const { data, error } = await supabaseServiceRole
       .from("notifications")
       .insert({
         user_id: userId,

@@ -1,21 +1,15 @@
-const { createClient } = require("@supabase/supabase-js");
+const { serviceRole: supabaseServiceRole } = require("../utils/supabaseClient");
 
 exports.getAddresses = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
 
-    const { data: addresses, error } = await supabase
+    const { data: addresses, error } = await supabaseServiceRole
       .from("addresses")
       .select("*")
       .eq("user_id", userId)
       .order("is_default", { ascending: false })
-      .order("created_at", { ascending: false }); // Add this line - newest first
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
     res.json({ success: true, data: addresses });
@@ -27,12 +21,6 @@ exports.getAddresses = async (req, res, next) => {
 exports.addAddress = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
 
     const { address_line_1, address_line_2, city, state, pincode, country, is_default, full_name, phone_number } =
       req.body;
@@ -44,14 +32,14 @@ exports.addAddress = async (req, res, next) => {
     }
 
     if (is_default) {
-      await supabase
+      await supabaseServiceRole
         .from("addresses")
         .update({ is_default: false })
         .eq("user_id", userId)
         .eq("is_default", true);
     }
 
-    const { data: newAddress, error } = await supabase
+    const { data: newAddress, error } = await supabaseServiceRole
       .from("addresses")
       .insert({
         user_id: userId,
@@ -80,12 +68,7 @@ exports.updateAddress = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
+
     const {
       address_line_1,
       address_line_2,
@@ -99,14 +82,14 @@ exports.updateAddress = async (req, res, next) => {
     } = req.body;
 
     if (is_default) {
-      await supabase
+      await supabaseServiceRole
         .from("addresses")
         .update({ is_default: false })
         .eq("user_id", userId)
         .eq("is_default", true);
     }
 
-    const { data: updatedAddress, error } = await supabase
+    const { data: updatedAddress, error } = await supabaseServiceRole
       .from("addresses")
       .update({
         address_line_1,
@@ -145,14 +128,8 @@ exports.deleteAddress = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    );
 
-    const { error } = await supabase
+    const { error } = await supabaseServiceRole
       .from("addresses")
       .delete()
       .eq("id", id)

@@ -1,12 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
-const authMiddleware = require('../middlewares/auth');
-const adminAuthMiddleware = require('../middlewares/adminAuth');
+const adminAuthMiddleware = require('../middlewares/adminAuthWithSupabase');
 const shippingController = require('../controllers/shippingController');
 
-// Protect all routes for admin usage
-router.use(authMiddleware);
+// Protect all routes for admin usage (Supabase JWT)
 router.use(adminAuthMiddleware);
 
 router.post('/check-rates', shippingController.checkRates);

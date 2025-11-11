@@ -1,13 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
-const authMiddleware = require('../middlewares/auth');
-const adminAuthMiddleware = require('../middlewares/adminAuth');
+const adminAuthMiddleware = require('../middlewares/adminAuthWithSupabase');
 const adminController = require('../controllers/adminController');
 const adminStoryController = require('../controllers/adminStoryController');
 
-// Apply authentication and admin authorization middleware to all admin routes
-router.use(authMiddleware);
+// Apply admin authentication middleware (includes both auth and role check for Supabase JWT)
 router.use(adminAuthMiddleware);
 
 // Dashboard

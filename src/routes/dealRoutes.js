@@ -2,13 +2,13 @@
 const express = require("express");
 const router = express.Router();
 const dealController = require("../controllers/dealController");
-const isAdmin = require("../middlewares/adminAuth");
+const adminAuthMiddleware = require("../middlewares/adminAuthWithSupabase");
 
-// Admin Endpoints
-router.post("/admin/deals", isAdmin, dealController.createDeal);
-router.get("/admin/deals", isAdmin, dealController.getAllDeals);
-router.put("/admin/deals/:id", isAdmin, dealController.updateDeal);
-router.delete("/admin/deals/:id", isAdmin, dealController.deleteDeal);
+// Admin Endpoints (Supabase JWT)
+router.post("/admin/deals", adminAuthMiddleware, dealController.createDeal);
+router.get("/admin/deals", adminAuthMiddleware, dealController.getAllDeals);
+router.put("/admin/deals/:id", adminAuthMiddleware, dealController.updateDeal);
+router.delete("/admin/deals/:id", adminAuthMiddleware, dealController.deleteDeal);
 
 // User Endpoint
 router.get("/deal-of-the-day", dealController.getActiveDeal);

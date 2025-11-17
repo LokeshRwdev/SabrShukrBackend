@@ -5,13 +5,8 @@ const MEDIA_TYPES = new Set(["image", "video"]);
 const pickFirstDefined = (...values) =>
   values.find((value) => value !== undefined && value !== null);
 
-const buildSupabaseClientWithAuth = (token) =>
-  createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
-const verifyUserPurchase = async (client, userId, productId) => {
-  const { count, error } = await client
+const verifyUserPurchase = async (userId, productId) => {
+  const { count, error } = await supabaseServiceRole
     .from("order_items")
     // Reuse the review verification logic: ensure an order exists for this user/product
     .select("*, orders!inner(*)", { count: "exact", head: true })
@@ -70,8 +65,6 @@ exports.getPublicStories = async (req, res, next) => {
 exports.submitStory = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseServiceRole = buildSupabaseClientWithAuth(token);
 
     const productId = pickFirstDefined(req.body.productId, req.body.product_id);
     const mediaUrl = pickFirstDefined(req.body.mediaUrl, req.body.media_url);
@@ -92,11 +85,7 @@ exports.submitStory = async (req, res, next) => {
       });
     }
 
-    const hasPurchased = await verifyUserPurchase(
-      supabaseServiceRole,
-      userId,
-      productId
-    );
+    const hasPurchased = await verifyUserPurchase(userId, productId);
 
     if (!hasPurchased) {
       return res.status(403).json({
@@ -134,8 +123,6 @@ exports.submitStory = async (req, res, next) => {
 exports.getMyStories = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const token = req.headers["authorization"]?.split(" ")[1];
-    const supabaseServiceRole = buildSupabaseClientWithAuth(token);
 
     const { data: stories, error } = await supabaseServiceRole
       .from("stories")

@@ -104,11 +104,18 @@ exports.mergeCart = async (req, res, next) => {
 exports.addToCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { variantId, quantity } = req.body; // Expect a single { variantId, quantity }
+    const { variantId, quantity, customization } = req.body; // Expect { variantId, quantity, customization? }
 
     if (!variantId || typeof quantity !== 'number' || quantity <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid or missing variantId/quantity.' });
     }
+
+    // Validate sticker_text length if provided
+    if (customization?.sticker_text && customization.sticker_text.length > 50) {
+      return res.status(400).json({ success: false, message: 'Sticker text cannot exceed 50 characters.' });
+    }
+
+    const customizationDetails = customization || {};
 
     
 
@@ -162,6 +169,7 @@ exports.addToCart = async (req, res, next) => {
           user_id: userId,
           variant_id: variantId,
           quantity: quantity,
+          customization_details: customizationDetails,
         })
         .select();
     }

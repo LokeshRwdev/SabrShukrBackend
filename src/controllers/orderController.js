@@ -20,7 +20,7 @@ exports.placeOrder = async (req, res, next) => {
     // 1. Get user's cart items with variant details
     const { data: cartItems, error: cartError } = await supabaseServiceRole
       .from('cart_items')
-      .select('variant_id, quantity, product_variants(id, price, stock_quantity, product_id, products(name))')
+      .select('variant_id, quantity, customization_details, product_variants(id, price, stock_quantity, product_id, products(name))')
       .eq('user_id', userId);
 
     if (cartError) throw cartError;
@@ -49,7 +49,8 @@ exports.placeOrder = async (req, res, next) => {
         variant_id: item.variant_id,
         product_id: variant.product_id,
         quantity: item.quantity,
-        price_at_purchase: variant.price
+        price_at_purchase: variant.price,
+        customization_details: item.customization_details || {}
       });
       stockDecrements.push({ id: variant.id, quantity: item.quantity });
     }

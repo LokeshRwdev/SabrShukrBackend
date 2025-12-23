@@ -141,22 +141,28 @@ exports.loginWithOtp = async (req, res, next) => {
     }
 
     // Step 3: Generate Custom JWTs
+    const accessTokenExpiry = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days from now
+    
     const accessToken = jwt.sign(
       { 
         sub: user.id, 
         role: 'authenticated',
         email: user.email,
         phone: user.phone_number,
-        full_name: user.full_name
+        full_name: user.full_name,
+        exp: accessTokenExpiry
       },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      process.env.JWT_SECRET
     );
 
+    const refreshTokenExpiry = Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60); // 90 days from now
+    
     const refreshToken = jwt.sign(
-      { sub: user.id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: '90d' }
+      { 
+        sub: user.id,
+        exp: refreshTokenExpiry
+      },
+      process.env.REFRESH_TOKEN_SECRET
     );
 
     // Step 4: Build Supabase-compatible session object
@@ -179,10 +185,26 @@ exports.loginWithOtp = async (req, res, next) => {
     };
 
     // Step 5: Return response mimicking Supabase format
+    // In authController.js - loginWithOtp and refreshToken endpoints
+
+    // After generating tokens, set httpOnly cookie
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'strict',
+      maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days in milliseconds
+      path: '/api/auth/refresh-token' // Only send cookie to refresh endpoint
+    });
+
+    // Return only access token in response body
     res.json({ 
       success: true, 
       data: {
-        session: sessionData,
+        session: {
+          access_token: accessToken,
+          expires_in: 2592000,
+          token_type: "bearer"
+        },
         user: sessionData.user
       }
     });
@@ -251,14 +273,18 @@ exports.verifyToken = async (req, res, next) => {
   }
 };
 
+// In authController.js - refreshToken endpoint
+
 exports.refreshToken = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body || {};
+    // Get refresh token from httpOnly cookie instead of body
+    const refreshToken = req.cookies.refresh_token;
     
     if (!refreshToken) {
-      return res
-        .status(400)
-        .json({ success: false, message: "refreshToken is required" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "No refresh token provided" 
+      });
     }
 
     // Verify the refresh token
@@ -292,17 +318,29 @@ exports.refreshToken = async (req, res, next) => {
     }
 
     // Generate new access token
+    const accessTokenExpiry = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
+    
     const newAccessToken = jwt.sign(
-      { sub: user.id, role: user.role || 'authenticated' },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { 
+        sub: user.id, 
+        role: user.role || 'authenticated',
+        email: user.email,
+        phone: user.phone_number,
+        full_name: user.full_name,
+        exp: accessTokenExpiry
+      },
+      process.env.JWT_SECRET
     );
 
     // Generate new refresh token
+    const refreshTokenExpiry = Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60); // 90 days
+    
     const newRefreshToken = jwt.sign(
-      { sub: user.id },
-      process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: '90d' }
+      { 
+        sub: user.id,
+        exp: refreshTokenExpiry
+      },
+      process.env.REFRESH_TOKEN_SECRET
     );
 
     // Build session object
@@ -324,10 +362,26 @@ exports.refreshToken = async (req, res, next) => {
       }
     };
 
+    // In authController.js - loginWithOtp and refreshToken endpoints
+
+    // After generating tokens, set httpOnly cookie
+    res.cookie('refresh_token', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'strict',
+      maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days in milliseconds
+      path: '/api/auth/refresh-token' // Only send cookie to refresh endpoint
+    });
+
+    // Return only new access token
     return res.json({ 
       success: true, 
       data: {
-        session: sessionData,
+        session: {
+          access_token: newAccessToken,
+          expires_in: 2592000,
+          token_type: "bearer"
+        },
         user: sessionData.user
       }
     });

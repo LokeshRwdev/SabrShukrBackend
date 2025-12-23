@@ -12,33 +12,51 @@ module.exports = async function (req, res, next) {
   
   const token = authHeader.split(' ')[1];
 
-
+  // Try verifying with custom JWT_SECRET first (user app tokens)
   try {
-    // Verify the access token using our custom JWT_SECRET
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Attach the user's ID to the request object in the format
-    // that all other controllers are expecting
     req.user = {
       id: decoded.sub,
       role: decoded.role || 'authenticated'
     };
     
-    // Proceed to the next middleware or controller
-    next();
-  } catch (error) {
-    // DEBUG: Log the actual error
-    console.error('❌ JWT Verification Error:', {
-      name: error.name,
-      message: error.message,
+    return next();
+  } catch (userTokenError) {
+    // User token verification failed, try Supabase JWT secret (admin app tokens)
+  }
+
+  // Try verifying with SUPABASE_JWT_SECRET (admin app tokens)
+  try {
+    const supabaseSecret = process.env.SUPABASE_JWT_SECRET;
+    
+    if (!supabaseSecret) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized: Invalid or expired token'
+      });
+    }
+
+    const decoded = jwt.verify(token, supabaseSecret);
+    
+    req.user = {
+      id: decoded.sub,
+      email: decoded.email,
+      role: decoded.role || 'authenticated'
+    };
+    
+    return next();
+  } catch (supabaseTokenError) {
+    // Both verification attempts failed
+    console.error('❌ JWT Verification Error (both secrets failed):', {
+      name: supabaseTokenError.name,
+      message: supabaseTokenError.message,
       tokenPreview: token.substring(0, 20) + '...'
     });
     
-    // This will catch expired tokens, invalid signatures, etc.
     return res.status(401).json({ 
       success: false, 
-      message: 'Unauthorized: Invalid or expired token',
-      error: error.message // Include error details for debugging
+      message: 'Unauthorized: Invalid or expired token'
     });
   }
 };

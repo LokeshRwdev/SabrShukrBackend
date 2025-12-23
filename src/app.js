@@ -7,6 +7,7 @@ const swaggerDocument = YAML.load("./swagger.yaml");
 const app = express();
 const bodyParser = require("body-parser");
 const path = require("path");
+const cookieParser = require('cookie-parser');
 
 const allowedOrigins = [
   "http://localhost:8080",
@@ -21,6 +22,8 @@ const allowedOrigins = [
   "http://localhost:3001",
   'https://beta.sabrshukr.store'
 ];
+
+app.use(cookieParser());
 
 app.use(
   cors({

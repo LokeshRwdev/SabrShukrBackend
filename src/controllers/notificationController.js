@@ -84,7 +84,6 @@ exports.createNotification = async (req, res, next) => {
 exports.sendOrderNotification = async (req, res, next) => {
   try {
     const {
-      customerEmail, // optional now; kept for backward compatibility
       orderId,
       customerName,
       orderItems,
@@ -94,17 +93,46 @@ exports.sendOrderNotification = async (req, res, next) => {
       total,
     } = req.body || {};
 
-    // Resolve email: prefer token email, else body
-    const resolvedEmail = extractEmailFromAuth(req) || customerEmail;
-
     // Validation
-    if (!resolvedEmail || orderId == null || orderId === "") {
+    if (orderId == null || orderId === "") {
       return res.status(400).json({
         success: false,
-        message:
-          "orderId is required and either a valid Authorization token or customerEmail must be provided",
+        message: "orderId is required",
       });
     }
+
+    // Fetch the order to get the user_id
+    const { data: order, error: orderError } = await supabaseServiceRole
+      .from("orders")
+      .select("user_id")
+      .eq("id", orderId)
+      .single();
+
+    if (orderError || !order) {
+      console.error("Error fetching order:", orderError);
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Fetch the customer email from profiles table
+    const { data: profile, error: profileError } = await supabaseServiceRole
+      .from("profiles")
+      .select("email")
+      .eq("id", order.user_id)
+      .single();
+
+    if (profileError || !profile || !profile.email) {
+      console.error("Error fetching customer email:", profileError);
+      return res.status(404).json({
+        success: false,
+        message: "Customer email not found",
+      });
+    }
+
+    const resolvedEmail = profile.email;
+    console.log(`Sending order notification to: ${resolvedEmail} for order #${orderId}`);
 
     const subject = `Your Order #${orderId} Confirmation`;
     const htmlContent = `

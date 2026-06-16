@@ -3,7 +3,18 @@ const express = require("express");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
-const swaggerDocument = YAML.load("./swagger.yaml");
+const fs = require('fs');
+const swaggerPath = path.join(__dirname, '..', 'swagger.yaml');
+let swaggerDocument = null;
+if (fs.existsSync(swaggerPath)) {
+  try {
+    swaggerDocument = YAML.load(swaggerPath);
+  } catch (err) {
+    console.warn('Failed to parse swagger.yaml at', swaggerPath, err.message);
+  }
+} else {
+  console.warn('swagger.yaml not found at', swaggerPath);
+}
 const app = express();
 const bodyParser = require("body-parser");
 const path = require("path");
@@ -52,7 +63,9 @@ app.use(express.static(path.join(__dirname)));
 
 app.use(express.json());
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+if (swaggerDocument) {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);

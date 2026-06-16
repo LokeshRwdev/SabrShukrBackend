@@ -4,6 +4,7 @@ const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const fs = require('fs');
+const path = require('path');
 const swaggerPath = path.join(__dirname, '..', 'swagger.yaml');
 let swaggerDocument = null;
 if (fs.existsSync(swaggerPath)) {
@@ -17,7 +18,6 @@ if (fs.existsSync(swaggerPath)) {
 }
 const app = express();
 const bodyParser = require("body-parser");
-const path = require("path");
 const cookieParser = require('cookie-parser');
 
 const allowedOrigins = [

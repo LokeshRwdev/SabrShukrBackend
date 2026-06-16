@@ -6,7 +6,7 @@ info:
 servers:
   - url: http://localhost:8080/api
     description: Development server
-  - url: https://sabrshukrbackend.onrender.com/api
+  - url: http://13.235.104.116:8080/api
     description: Production server
 components:
   securitySchemes:

@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node server",
     "dev": "nodemon src/server.js",
-    "vercel-build": "echo \"no build\""
+    "vercel-start": "node server.js"
   },
   "keywords": [],
   "author": "",

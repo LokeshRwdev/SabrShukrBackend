@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "vercel-start": "node server.js"
   },
@@ -31,8 +31,7 @@
     "sib-api-v3-sdk": "^8.5.0",
     "stripe": "^18.2.1",
     "swagger-ui-express": "^5.0.1",
-    "yamljs": "^0.3.0",
-    "serverless-http": "^2.7.0"
+    "yamljs": "^0.3.0"
   },
   "vercel": {
     "buildCommand": "echo 'no build'"

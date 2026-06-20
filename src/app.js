@@ -67,6 +67,13 @@ if (swaggerDocument) {
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 }
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "SabrShukr API is running",
+  });
+});
+
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
 

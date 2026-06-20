@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const fs = require('fs');
 const path = require('path');
@@ -64,7 +63,42 @@ app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 if (swaggerDocument) {
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  const serializedSwaggerDocument = JSON.stringify(swaggerDocument)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+
+  app.get(["/api-docs", "/api-docs/"], (req, res) => {
+    res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sabr Shukr API Documentation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.25.3/swagger-ui.css">
+    <style>body { margin: 0; background: #fafafa; }</style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.25.3/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.25.3/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.addEventListener("load", function () {
+        window.ui = SwaggerUIBundle({
+          spec: ${serializedSwaggerDocument},
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          presets: [
+            SwaggerUIBundle.presets.apis,
+            SwaggerUIStandalonePreset
+          ],
+          layout: "StandaloneLayout"
+        });
+      });
+    </script>
+  </body>
+</html>`);
+  });
 }
 
 app.get("/", (req, res) => {

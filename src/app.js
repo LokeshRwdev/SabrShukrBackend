@@ -21,7 +21,7 @@ const cookieParser = require('cookie-parser');
 
 const allowedOrigins = [
   "http://localhost:8080",
-  "https://admin.sabrshukr.store",
+  "https://admin.sabrshukr.co",
   "https://sabrshukr.store",
   "https://www.sabrshukr.store",
   "https://sabrshukr.co",
